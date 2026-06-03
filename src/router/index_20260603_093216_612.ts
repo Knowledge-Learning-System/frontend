@@ -31,6 +31,36 @@ const router = createRouter({
           name: 'KnowledgeGraph',
           component: () => import('@/views/KnowledgeGraph.vue'),
         },
+        {
+          path: 'qa',
+          name: 'QA',
+          component: () => import('@/views/qa/Index.vue'),
+        },
+        {
+          path: 'assignments',
+          name: 'Assignments',
+          component: () => import('@/views/assignments/Index.vue'),
+        },
+        {
+          path: 'diagnosis',
+          name: 'Diagnosis',
+          component: () => import('@/views/diagnosis/Index.vue'),
+        },
+        {
+          path: 'recommendations',
+          name: 'Recommendations',
+          component: () => import('@/views/recommendations/Index.vue'),
+        },
+        {
+          path: 'assessment',
+          name: 'Assessment',
+          component: () => import('@/views/assessment/Index.vue'),
+        },
+        {
+          path: 'search',
+          name: 'Search',
+          component: () => import('@/views/search/Index.vue'),
+        },
       ],
     },
   ],
