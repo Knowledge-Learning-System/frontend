@@ -4,6 +4,7 @@ export interface Course {
   description: string
   cover: string
   status: number
+  instructor: string
 }
 
 export interface MyCourse extends Course {

@@ -1,10 +1,10 @@
 import request from './request'
-import type { KnowledgeGraphData, KnowledgePointDetail, LearningPathItem, RecommendationItem, QASearchResult, SubTopicVO, GraphNode, GraphLink } from '@/types/knowledgeGraph'
+import type { KnowledgeGraphData, KnowledgePointDetail, LearningPathItem, RecommendationItem, QASearchResult, SubTopicVO } from '@/types/knowledgeGraph'
 
 const USE_MOCK = true
 
 // ===== Mock 数据：从 Neo4j + MySQL 查询的课程 4（数据库系统原理）章节结构 =====
-export const MOCK_CHAPTERS: SubTopicVO[] = [
+const MOCK_CHAPTERS: SubTopicVO[] = [
         {
           id: '6320773',
           name: '数据库基础',
@@ -19,9 +19,9 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
               children: [],
               videos: [
                 {id: 24, courseId: 4, knowledgePointId: '6320775', title: '第一节 数据库 1.1 数据库', filePath: '视频\\第一章 绪论  (上)\\第一节 数据库_1.1 数据库_blurred.mp4', duration: null},
-                {id: 25, courseId: 4, knowledgePointId: '6320775', title: '第二节 数据库系统', filePath: '视频\\第一章 绪论  (上)\\第二节 数据库系统_数据库系统_blurred.mp4', duration: null},
-                {id: 26, courseId: 4, knowledgePointId: '6320775', title: '第三节 数据库管理系统', filePath: '视频\\第一章 绪论 (下)\\第三节 数据库管理系统_数据库管理系统_blurred.mp4', duration: null},
-                {id: 27, courseId: 4, knowledgePointId: '6320775', title: '第四节 数据管理技术发展趋势', filePath: '视频\\第一章 绪论 (下)\\第四节 数据管理技术发展趋势_数据管理技术发展趋势_blurred.mp4', duration: null}
+                {id: 25, courseId: 4, knowledgePointId: '6320775', title: '第二节 数据库系统 数据库系统', filePath: '视频\\第一章 绪论  (上)\\第二节 数据库系统_数据库系统_blurred.mp4', duration: null},
+                {id: 26, courseId: 4, knowledgePointId: '6320775', title: '第三节 数据库管理系统 数据库管理系统', filePath: '视频\\第一章 绪论 (下)\\第三节 数据库管理系统_数据库管理系统_blurred.mp4', duration: null},
+                {id: 27, courseId: 4, knowledgePointId: '6320775', title: '第四节 数据管理技术发展趋势 数据管理技术发展趋势', filePath: '视频\\第一章 绪论 (下)\\第四节 数据管理技术发展趋势_数据管理技术发展趋势_blurred.mp4', duration: null}
               ],
               coursewares: [
                 {id: 110, courseId: 4, knowledgePointId: '6320775', title: '总结与提高（总时长8分20秒）_第一章总结与提高---教学内容', filePath: '课件\\总结与提高（总时长8分20秒）_第一章总结与提高---教学内容.pdf', fileType: 'pdf'},
@@ -339,9 +339,9 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
                 }
               ],
               videos: [
-                {id: 67, courseId: 4, knowledgePointId: '6320759', title: '第一节 数据库应用体系结构', filePath: '视频\\第四章 PG应用（上）\\第一节 数据库应用体系结构_数据库应用体系结构_blurred.mp4', duration: null},
-                {id: 69, courseId: 4, knowledgePointId: '6320759', title: '第三节 JDBC编程', filePath: '视频\\第四章 PG应用（下）\\第三节 JDBC编程_第三节 JDBC编程_blurred.mp4', duration: null},
-                {id: 70, courseId: 4, knowledgePointId: '6320759', title: '第四节 PG中的函数', filePath: '视频\\第四章 PG应用（下）\\第四节 PG中的函数_第四节 PG中的函数_blurred.mp4', duration: null}
+                {id: 67, courseId: 4, knowledgePointId: '6320759', title: '第一节 数据库应用体系结构 数据库应用体系结构', filePath: '视频\\第四章 PG应用（上）\\第一节 数据库应用体系结构_数据库应用体系结构_blurred.mp4', duration: null},
+                {id: 69, courseId: 4, knowledgePointId: '6320759', title: '第三节 JDBC编程 第三节 JDBC编程', filePath: '视频\\第四章 PG应用（下）\\第三节 JDBC编程_第三节 JDBC编程_blurred.mp4', duration: null},
+                {id: 70, courseId: 4, knowledgePointId: '6320759', title: '第四节 PG中的函数 第四节 PG中的函数', filePath: '视频\\第四章 PG应用（下）\\第四节 PG中的函数_第四节 PG中的函数_blurred.mp4', duration: null}
               ],
               coursewares: [
                 {id: 10, courseId: 4, knowledgePointId: '6320759', title: '7、游标_游标', filePath: '课件\\7、游标_游标.pdf', fileType: 'pdf'},
@@ -394,12 +394,12 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
                 }
               ],
               videos: [
-                {id: 33, courseId: 4, knowledgePointId: '6320770', title: '第一节 SQL概述', filePath: '视频\\第三章 PG数据定义与操作（上）\\第一节 SQL概述_SQL概述_blurred.mp4', duration: null},
+                {id: 33, courseId: 4, knowledgePointId: '6320770', title: '第一节 SQL概述 SQL概述', filePath: '视频\\第三章 PG数据定义与操作（上）\\第一节 SQL概述_SQL概述_blurred.mp4', duration: null},
                 {id: 34, courseId: 4, knowledgePointId: '6320770', title: '第二节 数据定义与修改 数据定义与更新', filePath: '视频\\第三章 PG数据定义与操作（上）\\第二节 数据定义与修改_数据定义与更新_blurred.mp4', duration: null},
-                {id: 35, courseId: 4, knowledgePointId: '6320770', title: '第五节 嵌套查询', filePath: '视频\\第三章 PG数据定义与操作（下）\\第五节 嵌套查询_嵌套查询_blurred.mp4', duration: null},
+                {id: 35, courseId: 4, knowledgePointId: '6320770', title: '第五节 嵌套查询 嵌套查询', filePath: '视频\\第三章 PG数据定义与操作（下）\\第五节 嵌套查询_嵌套查询_blurred.mp4', duration: null},
                 {id: 36, courseId: 4, knowledgePointId: '6320770', title: '第五节 嵌套查询 父子不相关嵌套查询执行示例', filePath: '视频\\第三章 PG数据定义与操作（下）\\第五节 嵌套查询_父子不相关嵌套查询执行示例_blurred.mp4', duration: null},
-                {id: 37, courseId: 4, knowledgePointId: '6320770', title: '第四节 联接查询', filePath: '视频\\第三章 PG数据定义与操作（下）\\第四节 联接查询_联接查询_blurred.mp4', duration: null},
-                {id: 38, courseId: 4, knowledgePointId: '6320770', title: '第三节 简单查询', filePath: '视频\\第三章 PG数据定义与操作（中）\\第三节 简单查询_第三节 简单查询_blurred.mp4', duration: null}
+                {id: 37, courseId: 4, knowledgePointId: '6320770', title: '第四节 联接查询 联接查询', filePath: '视频\\第三章 PG数据定义与操作（下）\\第四节 联接查询_联接查询_blurred.mp4', duration: null},
+                {id: 38, courseId: 4, knowledgePointId: '6320770', title: '第三节 简单查询 第三节 简单查询', filePath: '视频\\第三章 PG数据定义与操作（中）\\第三节 简单查询_第三节 简单查询_blurred.mp4', duration: null}
               ],
               coursewares: [
                 {id: 1, courseId: 4, knowledgePointId: '6320770', title: '10、数据库结构调整_数据库结构调整', filePath: '课件\\10、数据库结构调整_数据库结构调整.pdf', fileType: 'pdf'},
@@ -439,18 +439,9 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
                   description: '数据安全性包括保密性、完整性和可用性三个方面。保密性指数据对某些用户是秘密的，只有具有合法权限的用户才能读取数据，涉及数据值和数据存在性的保密。完整性指数据是完好的、正确的，只有具有合法写权限的用户才能对数据进行正确的写操作。可用性指具有合法读写权限的用户在需要时能够顺利地访问和操作数据。数据安全性的需求源于数据的敏感性，保护数据免受未经授权的访问和修改，确保数据在需要时可用。',
                   level: 3,
                   children: [],
-                  videos: [
-                    {id: 48, courseId: 4, knowledgePointId: '6320718', title: '第二节 视图', filePath: '视频\\第五章 PG数据保护（上）\\第二节 视图_视图_blurred.mp4', duration: null},
-                  ],
-                  coursewares: [
-                    {id: 12, courseId: 4, knowledgePointId: '6320718', title: '9、备份与恢复_备份与恢复', filePath: '课件\\9、备份与恢复_备份与恢复.pdf', fileType: 'pdf'},
-                  ],
-                  questions: [
-                    {id: 194, type: 'judge', content: '视图可以对数据存在性方面的保密性提供保护。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第二节 视图】', knowledgePointId: '6320718'},
-                    {id: 195, type: 'judge', content: '可以使用视图定义视图。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第二节 视图】', knowledgePointId: '6320718'},
-                    {id: 197, type: 'judge', content: '系统只存储视图的定义，不存视图的数据。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第二节 视图】', knowledgePointId: '6320718'},
-                    {id: 198, type: 'judge', content: '视图支持实现数据的逻辑独立性。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第二节 视图】', knowledgePointId: '6320718'},
-                  ]
+                  videos: [],
+                  coursewares: [],
+                  questions: []
                 },
                 {
                   id: '6320719',
@@ -458,19 +449,9 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
                   description: '数据库完整性是指数据的可信度保护，防止非法或未经授权的数据修改，包括数据值的完整性和数据来源的完整性。数据库管理系统通过将数据库操作组织成事务，以事务为单位实施并发控制和故障恢复，维护并发访问情况下的数据完整性。数据可用性是指对数据的期望使用能力保护，通常指减少数据库系统停工时间，保持数据持续可访问。数据库管理系统中的故障恢复机制不仅维护故障情况下的数据完整性，并且由于故障恢复机制对故障的有效处理，它也是保护数据可用性的重要手段。完整性保护机制包括访问控制、加密、事务和触发器等。事务处理是数据库系统中确保数据一致性和完整性的重要机制，具有原子性、一致性、隔离性和持久性（ACID）四个特性。并发控制和故障恢复是事务处理中的关键问题，通过锁机制、两阶段封锁协议等方法可以实现并发控制，而通过日志和检查点等技术可以实现故障恢复。',
                   level: 3,
                   children: [],
-                  videos: [
-                    {id: 51, courseId: 4, knowledgePointId: '6320719', title: '第六节 事务', filePath: '视频\\第五章 PG数据保护（下）\\第六节 事务_事务_blurred.mp4', duration: null},
-                    {id: 52, courseId: 4, knowledgePointId: '6320719', title: '第四节 完整性约束', filePath: '视频\\第五章 PG数据保护（下）\\第四节 完整性约束_完整性约束_blurred.mp4', duration: null}
-                  ],
-                  coursewares: [
-                    {id: 11, courseId: 4, knowledgePointId: '6320719', title: '8、事务并发控制_事务并发控制', filePath: '课件\\8、事务并发控制_事务并发控制.pdf', fileType: 'pdf'},
-                  ],
-                  questions: [
-                    {id: 217, type: 'judge', content: '事务具有原子性一致性、隔离性、持久性。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第六节 事务】', knowledgePointId: '6320719'},
-                    {id: 221, type: 'judge', content: 'PG提供三种独立的事务隔离级别，分别是读已提交READ COMMITTED、REPEATABLE READ和可串行化SERIALIZABLE。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第六节 事务】', knowledgePointId: '6320719'},
-                    {id: 222, type: 'judge', content: '可串行化事务中的语句看到的是该事务开始时的快照。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第六节 事务】', knowledgePointId: '6320719'},
-                    {id: 223, type: 'judge', content: '可串行化级别提供最严格的事务隔离，因为事务是一个接着一个串行执行的。', options: '["A. 正确", "B. 错误"]', answer: 'B', analysis: '【所属章节：第六节 事务】', knowledgePointId: '6320719'},
-                  ]
+                  videos: [],
+                  coursewares: [],
+                  questions: []
                 },
                 {
                   id: '6320757',
@@ -478,21 +459,9 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
                   description: '触发器是数据库系统中由事件驱动的特殊函数，用于在特定事件（如插入、更新、删除）发生时自动执行预定义操作。触发器分为行级和语句级，前者针对每行数据变化触发，后者针对整个SQL语句触发。触发器还分为before和after触发器，分别在事件前后触发。触发器函数定义触发器行为，返回触发器类型。系统自动创建NEW和OLD变量，NEW表示新数据行，OLD表示旧数据行。行级BEFORE触发器返回的行将被插入或更新，行级AFTER触发器的返回值被忽略。',
                   level: 3,
                   children: [],
-                  videos: [
-                    {id: 50, courseId: 4, knowledgePointId: '6320757', title: '第五节 触发器', filePath: '视频\\第五章 PG数据保护（下）\\第五节 触发器_触发器_blurred.mp4', duration: null},
-                  ],
-                  coursewares: [
-                    {id: 9, courseId: 4, knowledgePointId: '6320757', title: '6、触发器_触发器', filePath: '课件\\6、触发器_触发器.pdf', fileType: 'pdf'},
-                  ],
-                  questions: [
-                    {id: 209, type: 'judge', content: '触发器比CHECK约束更灵活，可以实施各种复杂的检查和操作，具有更精细和更强大的数据保护能力。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第五节 触发器】', knowledgePointId: '6320757'},
-                    {id: 210, type: 'judge', content: '触发器可以定义在触发事件之前或之后，即分为BEFORE和AFTER触发器，分别在操作完成前和操作完成后触发，执行触发器函数。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第五节 触发器】', knowledgePointId: '6320757'},
-                    {id: 211, type: 'judge', content: '行级触发器的触发器函数为每条触发语句执行一次。', options: '["A. 正确", "B. 错误"]', answer: 'B', analysis: '【所属章节：第五节 触发器】', knowledgePointId: '6320757'},
-                    {id: 212, type: 'judge', content: '触发器函数必须返回一个NULL或者一个元组类型的变量。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第五节 触发器】', knowledgePointId: '6320757'},
-                    {id: 213, type: 'judge', content: '行级after触发器的值总是被忽略，可以返回null；行级before触发器的返回值不同，对触发器操作的影响也不同，如果返回NULL则忽略该触发器的行级别操作，其后的触发器也不会被执行，如果非NULL则返回的行将成为被插入或者更新的行。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第五节 触发器】', knowledgePointId: '6320757'},
-                    {id: 214, type: 'judge', content: '通常，用行级before触发器检查或修改将要插入或者更新的数据。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第五节 触发器】', knowledgePointId: '6320757'},
-                    {id: 215, type: 'judge', content: '语句级before触发器在触发语句开始之前触发。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第五节 触发器】', knowledgePointId: '6320757'},
-                  ]
+                  videos: [],
+                  coursewares: [],
+                  questions: []
                 },
                 {
                   id: '6320766',
@@ -500,15 +469,9 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
                   description: '数据加密与安全是通过使用加密算法和密钥将明文数据转换为密文数据，以保护数据的机密性。加密算法分为对称加密、非对称加密和单向加密三种。对称加密使用相同的密钥进行加密和解密，代表性算法有AES等；非对称加密使用一对公钥和私钥进行加密和解密，代表性算法有RSA等；单向加密用于数据完整性校验，代表性算法有MD5和SHA等。数据库系统如MySQL和PostgreSQL提供了多种加密函数，用户可以在数据库层面实现数据的加密存储和解密读取。',
                   level: 3,
                   children: [],
-                  videos: [
-                    {id: 49, courseId: 4, knowledgePointId: '6320766', title: '第七节 加密', filePath: '视频\\第五章 PG数据保护（下）\\第七节 加密_加密_blurred.mp4', duration: null},
-                  ],
+                  videos: [],
                   coursewares: [],
-                  questions: [
-                    {id: 79, type: 'judge', content: '数据被加密后的结果称为密文，把密文还原为明文的过程称为解密。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第七节 加密】', knowledgePointId: '6320766'},
-                    {id: 80, type: 'judge', content: '加密体系中最核心的是用于加密解密的算法和密钥。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第七节 加密】', knowledgePointId: '6320766'},
-                    {id: 81, type: 'judge', content: '现代加密体系中算法通常是公开的，密钥是保密的并且需要向可信权威机构申请，安全性完全取决于密钥的保密性。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第七节 加密】', knowledgePointId: '6320766'},
-                  ]
+                  questions: []
                 },
                 {
                   id: '6320767',
@@ -516,19 +479,25 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
                   description: '权限管理与验证是数据库管理系统中的关键环节，涉及用户权限的赋予、收回和验证。通过GRANT语句，可以为用户分配特定的权限，如SELECT、INSERT、UPDATE、DELETE等，确保用户只能执行被授权的操作。REVOKE语句用于收回已赋予的权限，防止未经授权的访问和操作。权限验证通过检查用户是否具有特定操作的权限，确保数据库的安全性和完整性。合理的权限管理与验证可以有效防止数据泄露和篡改，保障数据库系统的安全。',
                   level: 3,
                   children: [],
-                  videos: [
-                    {id: 47, courseId: 4, knowledgePointId: '6320767', title: '第三节 访问控制', filePath: '视频\\第五章 PG数据保护（上）\\第三节 访问控制_访问控制_blurred.mp4', duration: null},
-                  ],
-                  coursewares: [
-                    {id: 7, courseId: 4, knowledgePointId: '6320767', title: '4、权限和对象管理_权限和对象管理', filePath: '课件\\4、权限和对象管理_权限和对象管理.pdf', fileType: 'pdf'},
-                  ],
+                  videos: [],
+                  coursewares: [],
                   questions: []
                 }
               ],
               videos: [
-                {id: 46, courseId: 4, knowledgePointId: '6320772', title: '第一节 数据保护', filePath: '视频\\第五章 PG数据保护（上）\\第一节 数据保护_数据保护_blurred.mp4', duration: null},
+                {id: 46, courseId: 4, knowledgePointId: '6320772', title: '第一节 数据保护 数据保护', filePath: '视频\\第五章 PG数据保护（上）\\第一节 数据保护_数据保护_blurred.mp4', duration: null},
+                {id: 47, courseId: 4, knowledgePointId: '6320772', title: '第三节 访问控制 访问控制', filePath: '视频\\第五章 PG数据保护（上）\\第三节 访问控制_访问控制_blurred.mp4', duration: null},
+                {id: 48, courseId: 4, knowledgePointId: '6320772', title: '第二节 视图 视图', filePath: '视频\\第五章 PG数据保护（上）\\第二节 视图_视图_blurred.mp4', duration: null},
+                {id: 49, courseId: 4, knowledgePointId: '6320772', title: '第七节 加密 加密', filePath: '视频\\第五章 PG数据保护（下）\\第七节 加密_加密_blurred.mp4', duration: null},
+                {id: 50, courseId: 4, knowledgePointId: '6320772', title: '第五节 触发器 触发器', filePath: '视频\\第五章 PG数据保护（下）\\第五节 触发器_触发器_blurred.mp4', duration: null},
+                {id: 51, courseId: 4, knowledgePointId: '6320772', title: '第六节 事务 事务', filePath: '视频\\第五章 PG数据保护（下）\\第六节 事务_事务_blurred.mp4', duration: null},
+                {id: 52, courseId: 4, knowledgePointId: '6320772', title: '第四节 完整性约束 完整性约束', filePath: '视频\\第五章 PG数据保护（下）\\第四节 完整性约束_完整性约束_blurred.mp4', duration: null}
               ],
               coursewares: [
+                {id: 7, courseId: 4, knowledgePointId: '6320772', title: '4、权限和对象管理_权限和对象管理', filePath: '课件\\4、权限和对象管理_权限和对象管理.pdf', fileType: 'pdf'},
+                {id: 9, courseId: 4, knowledgePointId: '6320772', title: '6、触发器_触发器', filePath: '课件\\6、触发器_触发器.pdf', fileType: 'pdf'},
+                {id: 11, courseId: 4, knowledgePointId: '6320772', title: '8、事务并发控制_事务并发控制', filePath: '课件\\8、事务并发控制_事务并发控制.pdf', fileType: 'pdf'},
+                {id: 12, courseId: 4, knowledgePointId: '6320772', title: '9、备份与恢复_备份与恢复', filePath: '课件\\9、备份与恢复_备份与恢复.pdf', fileType: 'pdf'},
                 {id: 137, courseId: 4, knowledgePointId: '6320772', title: '第五章ppt_第五章ppt精炼版', filePath: '课件\\第五章ppt_第五章ppt精炼版.pdf', fileType: 'pdf'},
                 {id: 138, courseId: 4, knowledgePointId: '6320772', title: '第五章ppt_第五章ppt详细版（上）', filePath: '课件\\第五章ppt_第五章ppt详细版（上）.pdf', fileType: 'pdf'},
                 {id: 139, courseId: 4, knowledgePointId: '6320772', title: '第五章ppt_第五章ppt详细版（下）', filePath: '课件\\第五章ppt_第五章ppt详细版（下）.pdf', fileType: 'pdf'}
@@ -536,7 +505,25 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
               questions: [
                 {id: 59, type: 'judge', content: '数据完整性包括数据值的完整性和数据来源的完整性。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第一节 数据保护】', knowledgePointId: '6320772'},
                 {id: 61, type: 'judge', content: '定义了完整性约束，就可以保证数据始终真实正确。', options: '["A. 正确", "B. 错误"]', answer: 'B', analysis: '【所属章节：第一节 数据保护】', knowledgePointId: '6320772'},
+                {id: 79, type: 'judge', content: '数据被加密后的结果称为密文，把密文还原为明文的过程称为解密。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第七节 加密】', knowledgePointId: '6320772'},
+                {id: 80, type: 'judge', content: '加密体系中最核心的是用于加密解密的算法和密钥。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第七节 加密】', knowledgePointId: '6320772'},
+                {id: 81, type: 'judge', content: '现代加密体系中算法通常是公开的，密钥是保密的并且需要向可信权威机构申请，安全性完全取决于密钥的保密性。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第七节 加密】', knowledgePointId: '6320772'},
                 {id: 114, type: 'judge', content: '保护管理模块以一种称为“事务”的方式，维护多用户并发访问及故障情况下的数据一致性。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第三节 数据库管理系统】', knowledgePointId: '6320772'},
+                {id: 194, type: 'judge', content: '视图可以对数据存在性方面的保密性提供保护。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第二节 视图】', knowledgePointId: '6320772'},
+                {id: 195, type: 'judge', content: '可以使用视图定义视图。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第二节 视图】', knowledgePointId: '6320772'},
+                {id: 197, type: 'judge', content: '系统只存储视图的定义，不存视图的数据。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第二节 视图】', knowledgePointId: '6320772'},
+                {id: 198, type: 'judge', content: '视图支持实现数据的逻辑独立性。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第二节 视图】', knowledgePointId: '6320772'},
+                {id: 209, type: 'judge', content: '触发器比CHECK约束更灵活，可以实施各种复杂的检查和操作，具有更精细和更强大的数据保护能力。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第五节 触发器】', knowledgePointId: '6320772'},
+                {id: 210, type: 'judge', content: '触发器可以定义在触发事件之前或之后，即分为BEFORE和AFTER触发器，分别在操作完成前和操作完成后触发，执行触发器函数。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第五节 触发器】', knowledgePointId: '6320772'},
+                {id: 211, type: 'judge', content: '行级触发器的触发器函数为每条触发语句执行一次。', options: '["A. 正确", "B. 错误"]', answer: 'B', analysis: '【所属章节：第五节 触发器】', knowledgePointId: '6320772'},
+                {id: 212, type: 'judge', content: '触发器函数必须返回一个NULL或者一个元组类型的变量。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第五节 触发器】', knowledgePointId: '6320772'},
+                {id: 213, type: 'judge', content: '行级after触发器的值总是被忽略，可以返回null；行级before触发器的返回值不同，对触发器操作的影响也不同，如果返回NULL则忽略该触发器的行级别操作，其后的触发器也不会被执行，如果非NULL则返回的行将成为被插入或者更新的行。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第五节 触发器】', knowledgePointId: '6320772'},
+                {id: 214, type: 'judge', content: '通常，用行级before触发器检查或修改将要插入或者更新的数据。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第五节 触发器】', knowledgePointId: '6320772'},
+                {id: 215, type: 'judge', content: '语句级before触发器在触发语句开始之前触发。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第五节 触发器】', knowledgePointId: '6320772'},
+                {id: 217, type: 'judge', content: '事务具有原子性一致性、隔离性、持久性。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第六节 事务】', knowledgePointId: '6320772'},
+                {id: 221, type: 'judge', content: 'PG提供三种独立的事务隔离级别，分别是读已提交READ COMMITTED、REPEATABLE READ和可串行化SERIALIZABLE。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第六节 事务】', knowledgePointId: '6320772'},
+                {id: 222, type: 'judge', content: '可串行化事务中的语句看到的是该事务开始时的快照。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第六节 事务】', knowledgePointId: '6320772'},
+                {id: 223, type: 'judge', content: '可串行化级别提供最严格的事务隔离，因为事务是一个接着一个串行执行的。', options: '["A. 正确", "B. 错误"]', answer: 'B', analysis: '【所属章节：第六节 事务】', knowledgePointId: '6320772'},
                 {id: 253, type: 'judge', content: '视图仅允许用户见之所需。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第四节 数据管理技术发展趋势】', knowledgePointId: '6320772'},
                 {id: 254, type: 'judge', content: '允许事务并发执行虽能带来性能上的好处，但需要对并发进行管控以保证数据完整性。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第四节 数据管理技术发展趋势】', knowledgePointId: '6320772'},
                 {id: 255, type: 'judge', content: '恢复机制保证并发情况下的数据完整性。', options: '["A. 正确", "B. 错误"]', answer: 'B', analysis: '【所属章节：第四节 数据管理技术发展趋势】', knowledgePointId: '6320772'},
@@ -558,12 +545,12 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
               level: 3,
               children: [],
               videos: [
-                {id: 57, courseId: 4, knowledgePointId: '6320844', title: '第一节 数据库设计方法和生命周期', filePath: '视频\\第六章 数据库设计：实体-联系方法（上）\\第一节 数据库设计方法和生命周期_数据库设计方法和生命周期_blurred.mp4', duration: null},
-                {id: 58, courseId: 4, knowledgePointId: '6320844', title: '第三节 基本E-R图转换为关系模式', filePath: '视频\\第六章 数据库设计：实体-联系方法（上）\\第三节 基本E-R图转换为关系模式_基本E-R图转换为关系模式_blurred.mp4', duration: null},
-                {id: 59, courseId: 4, knowledgePointId: '6320844', title: '第二节 第一小节 E-R模型元素', filePath: '视频\\第六章 数据库设计：实体-联系方法（上）\\第二节 第一小节 E-R模型元素_E-R模型元素_blurred.mp4', duration: null},
-                {id: 60, courseId: 4, knowledgePointId: '6320844', title: '第二节 第二小节 基本E-R图设计', filePath: '视频\\第六章 数据库设计：实体-联系方法（上）\\第二节 第二小节 基本E-R图设计_基本E-R图设计_blurred.mp4', duration: null},
-                {id: 61, courseId: 4, knowledgePointId: '6320844', title: '第五节 大数据E-R图及其转换', filePath: '视频\\第六章 数据库设计：实体-联系方法（下）\\第五节 大数据E-R图及其转换_大数据E-R图及其转换_blurred.mp4', duration: null},
-                {id: 62, courseId: 4, knowledgePointId: '6320844', title: '第四节 扩展E-R图及其转换', filePath: '视频\\第六章 数据库设计：实体-联系方法（中）\\第四节 扩展E-R图及其转换_扩展E-R图及其转换_blurred.mp4', duration: null}
+                {id: 57, courseId: 4, knowledgePointId: '6320844', title: '第一节 数据库设计方法和生命周期 数据库设计方法和生命周期', filePath: '视频\\第六章 数据库设计：实体-联系方法（上）\\第一节 数据库设计方法和生命周期_数据库设计方法和生命周期_blurred.mp4', duration: null},
+                {id: 58, courseId: 4, knowledgePointId: '6320844', title: '第三节 基本E-R图转换为关系模式 基本E-R图转换为关系模式', filePath: '视频\\第六章 数据库设计：实体-联系方法（上）\\第三节 基本E-R图转换为关系模式_基本E-R图转换为关系模式_blurred.mp4', duration: null},
+                {id: 59, courseId: 4, knowledgePointId: '6320844', title: '第二节 第一小节 E-R模型元素 E-R模型元素', filePath: '视频\\第六章 数据库设计：实体-联系方法（上）\\第二节 第一小节 E-R模型元素_E-R模型元素_blurred.mp4', duration: null},
+                {id: 60, courseId: 4, knowledgePointId: '6320844', title: '第二节 第二小节 基本E-R图设计 基本E-R图设计', filePath: '视频\\第六章 数据库设计：实体-联系方法（上）\\第二节 第二小节 基本E-R图设计_基本E-R图设计_blurred.mp4', duration: null},
+                {id: 61, courseId: 4, knowledgePointId: '6320844', title: '第五节 大数据E-R图及其转换 大数据E-R图及其转换', filePath: '视频\\第六章 数据库设计：实体-联系方法（下）\\第五节 大数据E-R图及其转换_大数据E-R图及其转换_blurred.mp4', duration: null},
+                {id: 62, courseId: 4, knowledgePointId: '6320844', title: '第四节 扩展E-R图及其转换 扩展E-R图及其转换', filePath: '视频\\第六章 数据库设计：实体-联系方法（中）\\第四节 扩展E-R图及其转换_扩展E-R图及其转换_blurred.mp4', duration: null}
               ],
               coursewares: [
                 {id: 140, courseId: 4, knowledgePointId: '6320844', title: '第六章ppt_第六章ppt精炼版', filePath: '课件\\第六章ppt_第六章ppt精炼版.pdf', fileType: 'pdf'},
@@ -583,11 +570,11 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
               level: 3,
               children: [],
               videos: [
-                {id: 28, courseId: 4, knowledgePointId: '6320845', title: '第一节 函数依赖', filePath: '视频\\第七章 数据库设计：属性-联系方法（上）\\第一节 函数依赖_函数依赖_blurred.mp4', duration: null},
-                {id: 29, courseId: 4, knowledgePointId: '6320845', title: '第二节 模式分解', filePath: '视频\\第七章 数据库设计：属性-联系方法（上）\\第二节 模式分解_模式分解_blurred.mp4', duration: null},
-                {id: 30, courseId: 4, knowledgePointId: '6320845', title: '第三节 范式', filePath: '视频\\第七章 数据库设计：属性-联系方法（下）\\第三节 范式_范式_blurred.mp4', duration: null},
-                {id: 31, courseId: 4, knowledgePointId: '6320845', title: '第五节 大数据与反规范化', filePath: '视频\\第七章 数据库设计：属性-联系方法（下）\\第五节 大数据与反规范化_大数据与反规范化_blurred.mp4', duration: null},
-                {id: 32, courseId: 4, knowledgePointId: '6320845', title: '第四节 规范化', filePath: '视频\\第七章 数据库设计：属性-联系方法（下）\\第四节 规范化_规范化_blurred.mp4', duration: null}
+                {id: 28, courseId: 4, knowledgePointId: '6320845', title: '第一节 函数依赖 函数依赖', filePath: '视频\\第七章 数据库设计：属性-联系方法（上）\\第一节 函数依赖_函数依赖_blurred.mp4', duration: null},
+                {id: 29, courseId: 4, knowledgePointId: '6320845', title: '第二节 模式分解 模式分解', filePath: '视频\\第七章 数据库设计：属性-联系方法（上）\\第二节 模式分解_模式分解_blurred.mp4', duration: null},
+                {id: 30, courseId: 4, knowledgePointId: '6320845', title: '第三节 范式 范式', filePath: '视频\\第七章 数据库设计：属性-联系方法（下）\\第三节 范式_范式_blurred.mp4', duration: null},
+                {id: 31, courseId: 4, knowledgePointId: '6320845', title: '第五节 大数据与反规范化 大数据与反规范化', filePath: '视频\\第七章 数据库设计：属性-联系方法（下）\\第五节 大数据与反规范化_大数据与反规范化_blurred.mp4', duration: null},
+                {id: 32, courseId: 4, knowledgePointId: '6320845', title: '第四节 规范化 规范化', filePath: '视频\\第七章 数据库设计：属性-联系方法（下）\\第四节 规范化_规范化_blurred.mp4', duration: null}
               ],
               coursewares: [
                 {id: 128, courseId: 4, knowledgePointId: '6320845', title: '第七章ppt_第七章ppt精炼版', filePath: '课件\\第七章ppt_第七章ppt精炼版.pdf', fileType: 'pdf'},
@@ -638,10 +625,10 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
               level: 3,
               children: [],
               videos: [
-                {id: 53, courseId: 4, knowledgePointId: '6320842', title: '第一节 磁盘上的元组', filePath: '视频\\第八章 数据存储与存取\\第一节 磁盘上的元组_磁盘上的元组_blurred.mp4', duration: null},
-                {id: 54, courseId: 4, knowledgePointId: '6320842', title: '第三节 磁盘上元组B树索引', filePath: '视频\\第八章 数据存储与存取\\第三节 磁盘上元组B树索引_磁盘上元组B树索引_blurred.mp4', duration: null},
-                {id: 55, courseId: 4, knowledgePointId: '6320842', title: '第二节 磁盘上元组索引基础', filePath: '视频\\第八章 数据存储与存取\\第二节 磁盘上元组索引基础_磁盘上元组索引基础_blurred.mp4', duration: null},
-                {id: 56, courseId: 4, knowledgePointId: '6320842', title: '第四节 磁盘上元组B+树索引', filePath: '视频\\第八章 数据存储与存取\\第四节 磁盘上元组B+树索引_磁盘上元组B+树索引_blurred.mp4', duration: null}
+                {id: 53, courseId: 4, knowledgePointId: '6320842', title: '第一节 磁盘上的元组 磁盘上的元组', filePath: '视频\\第八章 数据存储与存取\\第一节 磁盘上的元组_磁盘上的元组_blurred.mp4', duration: null},
+                {id: 54, courseId: 4, knowledgePointId: '6320842', title: '第三节 磁盘上元组B树索引 磁盘上元组B树索引', filePath: '视频\\第八章 数据存储与存取\\第三节 磁盘上元组B树索引_磁盘上元组B树索引_blurred.mp4', duration: null},
+                {id: 55, courseId: 4, knowledgePointId: '6320842', title: '第二节 磁盘上元组索引基础 磁盘上元组索引基础', filePath: '视频\\第八章 数据存储与存取\\第二节 磁盘上元组索引基础_磁盘上元组索引基础_blurred.mp4', duration: null},
+                {id: 56, courseId: 4, knowledgePointId: '6320842', title: '第四节 磁盘上元组B+树索引 磁盘上元组B+树索引', filePath: '视频\\第八章 数据存储与存取\\第四节 磁盘上元组B+树索引_磁盘上元组B+树索引_blurred.mp4', duration: null}
               ],
               coursewares: [
                 {id: 5, courseId: 4, knowledgePointId: '6320842', title: '2、表空间管理_表空间管理', filePath: '课件\\2、表空间管理_表空间管理.pdf', fileType: 'pdf'}
@@ -738,7 +725,7 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
                 }
               ],
               videos: [
-                {id: 64, courseId: 4, knowledgePointId: '6320763', title: '第三节 大数据计算', filePath: '视频\\第十章 大数据技术\\第三节 大数据计算_大数据计算_blurred.mp4', duration: null}
+                {id: 64, courseId: 4, knowledgePointId: '6320763', title: '第三节 大数据计算 大数据计算', filePath: '视频\\第十章 大数据技术\\第三节 大数据计算_大数据计算_blurred.mp4', duration: null}
               ],
               coursewares: [],
               questions: []
@@ -812,8 +799,8 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
                 }
               ],
               videos: [
-                {id: 63, courseId: 4, knowledgePointId: '6320765', title: '第一节 大数据及其特征', filePath: '视频\\第十章 大数据技术\\第一节 大数据及其特征_大数据及其特征_blurred.mp4', duration: null},
-                {id: 65, courseId: 4, knowledgePointId: '6320765', title: '第二节 大数据存储技术', filePath: '视频\\第十章 大数据技术\\第二节 大数据存储技术_大数据存储技术_blurred.mp4', duration: null}
+                {id: 63, courseId: 4, knowledgePointId: '6320765', title: '第一节 大数据及其特征 大数据及其特征', filePath: '视频\\第十章 大数据技术\\第一节 大数据及其特征_大数据及其特征_blurred.mp4', duration: null},
+                {id: 65, courseId: 4, knowledgePointId: '6320765', title: '第二节 大数据存储技术 大数据存储技术', filePath: '视频\\第十章 大数据技术\\第二节 大数据存储技术_大数据存储技术_blurred.mp4', duration: null}
               ],
               coursewares: [],
               questions: [
@@ -839,7 +826,7 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
               level: 3,
               children: [],
               videos: [
-                {id: 66, courseId: 4, knowledgePointId: '6320812', title: '第四节 大数据应用', filePath: '视频\\第十章 大数据技术\\第四节 大数据应用_大数据应用_blurred.mp4', duration: null}
+                {id: 66, courseId: 4, knowledgePointId: '6320812', title: '第四节 大数据应用 大数据应用', filePath: '视频\\第十章 大数据技术\\第四节 大数据应用_大数据应用_blurred.mp4', duration: null}
               ],
               coursewares: [],
               questions: []
@@ -869,7 +856,7 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
                     {id: 10, courseId: 4, knowledgePointId: '6320916', title: '视频 11', filePath: '视频\\实验（二 MySQL）：MySQL源码安装\\视频_11_blurred.mp4', duration: null},
                     {id: 11, courseId: 4, knowledgePointId: '6320916', title: '视频 22', filePath: '视频\\实验（二 MySQL）：MySQL源码安装\\视频_22_blurred.mp4', duration: null},
                     {id: 12, courseId: 4, knowledgePointId: '6320916', title: '视频：PostgreSQL 安装辅导视频（适用于PG10 11 12 9） PostgreSQL 安装直播精剪', filePath: '视频\\实验（二 PostgreSQL）： PostgreSQL  安装\\视频：PostgreSQL 安装辅导视频（适用于PG10_11_12_9）_PostgreSQL 安装直播精剪_blurred.mp4', duration: null},
-                    {id: 13, courseId: 4, knowledgePointId: '6320916', title: '视频', filePath: '视频\\实验（二 PostgreSQL）：pgSQL源码安装\\视频_视频_blurred.mp4', duration: null}
+                    {id: 13, courseId: 4, knowledgePointId: '6320916', title: '视频 视频', filePath: '视频\\实验（二 PostgreSQL）：pgSQL源码安装\\视频_视频_blurred.mp4', duration: null}
                   ],
                   coursewares: [
                     {id: 28, courseId: 4, knowledgePointId: '6320916', title: 'GaussDB登录_GaussDB登录指南', filePath: '课件\\GaussDB登录_GaussDB登录指南.pdf', fileType: 'pdf'},
@@ -891,7 +878,7 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
                 {id: 1, courseId: 4, knowledgePointId: '6320898', title: '实验辅导视频 实验指导直播', filePath: '视频\\实验（A）： Access实验辅导材料\\实验辅导视频_实验指导直播_blurred.mp4', duration: null},
                 {id: 3, courseId: 4, knowledgePointId: '6320898', title: 'Oracle安装与配置（带解说） Oralce安装与配置', filePath: '视频\\实验（O）： Oracle实验辅导材料\\Oracle安装与配置（带解说）_Oralce安装与配置_blurred.mp4', duration: null},
                 {id: 4, courseId: 4, knowledgePointId: '6320898', title: 'SQLServer安装操作基础（带解说） SQLServer安装操作（带解说）', filePath: '视频\\实验（S）： SQLServer实验辅导材料\\SQLServer安装操作基础（带解说）_SQLServer安装操作（带解说）_blurred.mp4', duration: null},
-                {id: 5, courseId: 4, knowledgePointId: '6320898', title: 'SQLServer操作基础（无解说）', filePath: '视频\\实验（S）： SQLServer实验辅导材料\\SQLServer操作基础（无解说）_SQLServer操作基础（无解说）_blurred.mp4', duration: null},
+                {id: 5, courseId: 4, knowledgePointId: '6320898', title: 'SQLServer操作基础（无解说） SQLServer操作基础（无解说）', filePath: '视频\\实验（S）： SQLServer实验辅导材料\\SQLServer操作基础（无解说）_SQLServer操作基础（无解说）_blurred.mp4', duration: null},
                 {id: 6, courseId: 4, knowledgePointId: '6320898', title: '视频：认识数据库实验辅导视频 直播录放1', filePath: '视频\\实验（一）：认识数据库_基于“国家奖励数据库”-感受正能量 传播正能量\\视频：认识数据库实验辅导视频_直播录放1_blurred.mp4', duration: null}
               ],
               coursewares: [
@@ -1014,7 +1001,7 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
               children: [],
               videos: [
                 {id: 7, courseId: 4, knowledgePointId: '6320905', title: '视频：嵌入式pgSQL实验辅导视频 频：实验辅导视频', filePath: '视频\\实验（七 PostgreSQL）：嵌入式pgSQL_基于诺贝尔奖得主数据库-弘扬科学精神，建设创新型国家，促进人类进步。\\视频：嵌入式pgSQL实验辅导视频_频：实验辅导视频_blurred.mp4', duration: null},
-                {id: 68, courseId: 4, knowledgePointId: '6320905', title: '第二节 嵌入式pgSQL', filePath: '视频\\第四章 PG应用（上）\\第二节 嵌入式pgSQL_嵌入式pgSQL_blurred.mp4', duration: null}
+                {id: 68, courseId: 4, knowledgePointId: '6320905', title: '第二节 嵌入式pgSQL 嵌入式pgSQL', filePath: '视频\\第四章 PG应用（上）\\第二节 嵌入式pgSQL_嵌入式pgSQL_blurred.mp4', duration: null}
               ],
               coursewares: [
                 {id: 47, courseId: 4, knowledgePointId: '6320905', title: 'Python连接Gauss DB_Python连接GaussDB ppt', filePath: '课件\\Python连接Gauss DB_Python连接GaussDB ppt.pdf', fileType: 'pdf'},
@@ -1066,120 +1053,7 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
               name: '事务',
               description: '',
               level: 3,
-              children: [
-                {
-                  id: '6320910_acid_01',
-                  name: '原子性',
-                  description: '事务的原子性确保事务中的所有操作要么全部成功执行，要么全部不执行，不会出现部分执行的状态。',
-                  level: 4,
-                  children: [],
-                  videos: [],
-                  coursewares: [],
-                  questions: []
-                },
-                {
-                  id: '6320910_acid_02',
-                  name: '一致性',
-                  description: '事务的一致性确保事务执行前后数据库都处于一致状态，所有数据必须满足预定义的完整性约束。',
-                  level: 4,
-                  children: [
-                    {
-                      id: '6320910_acid_02_01',
-                      name: '数据完整性约束',
-                      description: '通过主键、外键、CHECK约束等机制保证数据在事务前后满足业务规则。',
-                      level: 5,
-                      children: [],
-                      videos: [],
-                      coursewares: [],
-                      questions: []
-                    },
-                    {
-                      id: '6320910_acid_02_02',
-                      name: '一致性级别',
-                      description: '不同隔离级别下的一致性保证程度不同，包括强一致性、最终一致性等。',
-                      level: 5,
-                      children: [],
-                      videos: [],
-                      coursewares: [],
-                      questions: []
-                    },
-                    {
-                      id: '6320910_acid_02_03',
-                      name: 'CAP定理',
-                      description: '分布式系统中一致性、可用性、分区容错性三者不可兼得，最多同时满足两个。',
-                      level: 5,
-                      children: [],
-                      videos: [],
-                      coursewares: [],
-                      questions: []
-                    }
-                  ],
-                  videos: [],
-                  coursewares: [],
-                  questions: []
-                },
-                {
-                  id: '6320910_acid_03',
-                  name: '隔离性',
-                  description: '事务的隔离性确保并发执行的事务之间互不干扰，每个事务都感觉不到其他事务的存在。',
-                  level: 4,
-                  children: [
-                    {
-                      id: '6320910_acid_03_01',
-                      name: '读未提交',
-                      description: '最低隔离级别，一个事务可以读取另一个未提交事务的修改，可能导致脏读。',
-                      level: 5,
-                      children: [],
-                      videos: [],
-                      coursewares: [],
-                      questions: []
-                    },
-                    {
-                      id: '6320910_acid_03_02',
-                      name: '读已提交',
-                      description: '一个事务只能读取已提交事务的修改，避免脏读但可能出现不可重复读。',
-                      level: 5,
-                      children: [],
-                      videos: [],
-                      coursewares: [],
-                      questions: []
-                    },
-                    {
-                      id: '6320910_acid_03_03',
-                      name: '可重复读',
-                      description: '在同一事务中多次读取同一数据结果一致，避免不可重复读但可能出现幻读。',
-                      level: 5,
-                      children: [],
-                      videos: [],
-                      coursewares: [],
-                      questions: []
-                    },
-                    {
-                      id: '6320910_acid_03_04',
-                      name: '可串行化',
-                      description: '最高隔离级别，事务串行执行，完全避免脏读、不可重复读和幻读。',
-                      level: 5,
-                      children: [],
-                      videos: [],
-                      coursewares: [],
-                      questions: []
-                    }
-                  ],
-                  videos: [],
-                  coursewares: [],
-                  questions: []
-                },
-                {
-                  id: '6320910_acid_04',
-                  name: '持久性',
-                  description: '事务的持久性确保一旦事务提交成功，其对数据库的修改就是永久性的，即使系统崩溃也不会丢失。',
-                  level: 4,
-                  children: [],
-                  videos: [],
-                  coursewares: [],
-                  questions: []
-                }
-              ],
+              children: [],
               videos: [],
               coursewares: [
                 {id: 13, courseId: 4, knowledgePointId: '6320910', title: 'GaussDB事务_GaussDB事务ppt', filePath: '课件\\GaussDB事务_GaussDB事务ppt.pdf', fileType: 'pdf'},
@@ -1224,9 +1098,9 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
               children: [],
               videos: [
                 {id: 19, courseId: 4, knowledgePointId: '6320914', title: '视频：索引与查询优化实验辅导视频 直播sc', filePath: '视频\\实验（十三 PostgreSQL）：索引与查询优化_基于图灵奖数据库--中华复兴，匹夫有责；立志高远，复兴中华\\视频：索引与查询优化实验辅导视频_直播sc_blurred.mp4', duration: null},
-                {id: 39, courseId: 4, knowledgePointId: '6320914', title: '第一节 关系操作的实现', filePath: '视频\\第九章 查询优化\\第一节 关系操作的实现_关系操作的实现_blurred.mp4', duration: null},
-                {id: 40, courseId: 4, knowledgePointId: '6320914', title: '第三节 查询优化', filePath: '视频\\第九章 查询优化\\第三节 查询优化_查询优化_blurred.mp4', duration: null},
-                {id: 41, courseId: 4, knowledgePointId: '6320914', title: '第二节 关系操作的实现（续）', filePath: '视频\\第九章 查询优化\\第二节 关系操作的实现（续）_关系操作的实现（续）_blurred.mp4', duration: null}
+                {id: 39, courseId: 4, knowledgePointId: '6320914', title: '第一节 关系操作的实现 关系操作的实现', filePath: '视频\\第九章 查询优化\\第一节 关系操作的实现_关系操作的实现_blurred.mp4', duration: null},
+                {id: 40, courseId: 4, knowledgePointId: '6320914', title: '第三节 查询优化 查询优化', filePath: '视频\\第九章 查询优化\\第三节 查询优化_查询优化_blurred.mp4', duration: null},
+                {id: 41, courseId: 4, knowledgePointId: '6320914', title: '第二节 关系操作的实现（续） 关系操作的实现（续）', filePath: '视频\\第九章 查询优化\\第二节 关系操作的实现（续）_关系操作的实现（续）_blurred.mp4', duration: null}
               ],
               coursewares: [
                 {id: 2, courseId: 4, knowledgePointId: '6320914', title: '11、SQL调优_SQL调优', filePath: '课件\\11、SQL调优_SQL调优.pdf', fileType: 'pdf'},
@@ -1267,50 +1141,7 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
         }
     ]
 
-// ── 从 MOCK_CHAPTERS 构建知识图谱 nodes & links ──
-const buildGraphFromChapters = (chapters: SubTopicVO[]): KnowledgeGraphData => {
-  const nodes: GraphNode[] = []
-  const links: GraphLink[] = []
-
-  const addKpTree = (
-    kp: SubTopicVO['knowledgePoints'][number],
-    parentId: string,
-    depth: number,
-    relationType: string
-  ) => {
-    const group = Math.min(depth + 1, 7)
-    nodes.push({
-      id: kp.id,
-      name: kp.name,
-      group,
-      level: kp.level,
-      description: kp.description || undefined,
-    })
-    links.push({ source: parentId, target: kp.id, type: relationType })
-    for (const child of kp.children) {
-      addKpTree(child, kp.id, depth + 1, 'PARENT_KP')
-    }
-  }
-
-  for (const st of chapters) {
-    nodes.push({
-      id: st.id,
-      name: st.name,
-      group: 0,
-      description: st.description || undefined,
-    })
-    for (const kp of st.knowledgePoints) {
-      addKpTree(kp, st.id, 0, 'BELONGS_TO')
-    }
-  }
-
-  return { nodes, links }
-}
-
-export const getKnowledgeGraph = (courseId: number): Promise<KnowledgeGraphData> => {
-  if (USE_MOCK && courseId === 4) {
-    return Promise.resolve(buildGraphFromChapters(MOCK_CHAPTERS))
-  }
+export const getKnowledgeGraph = (courseId: number) => {
   return request.get<KnowledgeGraphData, KnowledgeGraphData>(`/knowledge-graph/${courseId}`)
 }
 

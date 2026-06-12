@@ -59,27 +59,91 @@
           </el-dropdown>
         </div>
 
-        <!-- 中间导航标签 -->
-        <nav class="header-nav">
-          <router-link
-            v-for="item in navItems"
-            :key="item.path"
-            :to="item.path"
-            class="nav-pill"
-            :class="{ active: isNavActive(item.path) }"
-          >
-            {{ item.name }}
-          </router-link>
-        </nav>
+        <!-- 中间搜索区 -->
+        <div class="header-nav-area">
+          <div class="search-box">
+            <el-input
+              v-model="globalSearchKeyword"
+              placeholder="搜索课程、知识点..."
+              clearable
+              :prefix-icon="Search"
+              class="global-search-input"
+              @keyup.enter="handleGlobalSearch"
+              @clear="handleGlobalSearchClear"
+            />
+          </div>
+        </div>
 
         <!-- 右侧用户操作区 -->
         <div class="header-right">
-          <!-- 通知 -->
-          <el-badge :value="unreadCount" :hidden="unreadCount === 0" class="notify-badge">
-            <el-button class="icon-btn" circle>
-              <el-icon :size="20"><Bell /></el-icon>
-            </el-button>
-          </el-badge>
+          <!-- 复习提醒 -->
+          <el-popover placement="bottom-end" :width="380" trigger="click" :show-arrow="false" popper-class="review-reminder-popover">
+            <template #reference>
+              <el-badge :value="reviewCount" :hidden="reviewCount === 0" :max="99" class="notify-badge">
+                <el-button class="icon-btn" circle>
+                  <el-icon :size="20"><Bell /></el-icon>
+                </el-button>
+              </el-badge>
+            </template>
+
+            <div class="review-reminder">
+              <div class="reminder-header">
+                <div class="reminder-title">
+                  <el-icon :size="18" color="#f56c6c"><Clock /></el-icon>
+                  <span>复习提醒</span>
+                </div>
+                <el-button text size="small" @click="handleMarkAllRead" v-if="reviewItems.length > 0">全部已读</el-button>
+              </div>
+
+              <div class="reminder-list" v-if="reviewItems.length > 0">
+                <div
+                  v-for="item in reviewItems"
+                  :key="item.id"
+                  class="reminder-item"
+                  :class="{ 'reminder-item-urgent': item.urgent }"
+                  @click="handleReviewItemClick(item)"
+                >
+                  <div class="reminder-item-icon">
+                    <el-icon :size="20" :color="item.urgent ? '#f56c6c' : '#909399'">
+                      <WarningFilled v-if="item.urgent" />
+                      <Clock v-else />
+                    </el-icon>
+                  </div>
+                  <div class="reminder-item-content">
+                    <div class="reminder-item-header">
+                      <h4 class="reminder-item-name">{{ item.name }}</h4>
+                      <el-tag size="small" :type="item.urgent ? 'danger' : 'warning'" effect="dark">
+                        {{ item.urgent ? '需复习' : '可复习' }}
+                      </el-tag>
+                    </div>
+                    <p class="reminder-item-desc">{{ item.description }}</p>
+                    <div class="reminder-item-meta">
+                      <span class="meta-item">
+                        <el-icon :size="14"><CircleCheckFilled /></el-icon>
+                        掌握度 {{ item.mastery }}%
+                      </span>
+                      <span class="meta-item">
+                        <el-icon :size="14"><Clock /></el-icon>
+                        {{ item.daysUntilDue === 0 ? '今天' : item.daysUntilDue + '天后' }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="reminder-empty" v-else>
+                <el-icon :size="40" color="#c0c4cc"><CircleCheckFilled /></el-icon>
+                <p>暂无待复习知识点</p>
+              </div>
+
+              <div class="reminder-footer" v-if="reviewItems.length > 0">
+                <el-button type="primary" size="small" text @click="handleViewAllReview">
+                  查看全部复习计划
+                  <el-icon><ArrowRight /></el-icon>
+                </el-button>
+              </div>
+            </div>
+          </el-popover>
 
           <!-- 用户头像下拉 -->
           <el-dropdown trigger="click">
@@ -129,10 +193,12 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  ArrowDown, Bell, Plus, Reading, Setting, SwitchButton, User,
+  ArrowDown, ArrowRight, Bell, CircleCheckFilled, Clock, Document, Plus, Reading,
+  Search, Setting, SwitchButton, User, WarningFilled,
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useCourseStore } from '@/stores/course'
+import { ElMessage } from 'element-plus'
 
 const route = useRoute()
 const router = useRouter()
@@ -140,21 +206,48 @@ const userStore = useUserStore()
 const courseStore = useCourseStore()
 
 const unreadCount = ref(2)
+const reviewCount = ref(3)
+const globalSearchKeyword = ref('')
 
-const navItems = [
-  { name: '首页', path: '/dashboard' },
-  { name: '知识图谱', path: '/knowledge-graph' },
-  { name: '问答', path: '/qa' },
-  { name: '作业', path: '/assignments' },
-  { name: '诊断', path: '/diagnosis' },
-  { name: '推荐', path: '/recommendations' },
-  { name: '测评', path: '/assessment' },
-  { name: '搜索', path: '/search' },
-]
-
-const isNavActive = (path: string) => {
-  return route.path === path || route.path.startsWith(path + '/')
+interface ReviewItem {
+  id: string
+  name: string
+  description: string
+  mastery: number
+  daysUntilDue: number
+  urgent: boolean
+  nodeId: string
 }
+
+const reviewItems = ref<ReviewItem[]>([
+  {
+    id: 'r1',
+    name: '软件测试基础',
+    description: '根据艾宾浩斯遗忘曲线，该知识点需要复习',
+    mastery: 45,
+    daysUntilDue: 1,
+    urgent: true,
+    nodeId: 'kp5',
+  },
+  {
+    id: 'r2',
+    name: '需求分析方法',
+    description: '已学习 3 天，建议及时复习巩固',
+    mastery: 58,
+    daysUntilDue: 2,
+    urgent: false,
+    nodeId: 'kp2',
+  },
+  {
+    id: 'r3',
+    name: '系统设计基础',
+    description: '掌握度较低，需要加强复习',
+    mastery: 35,
+    daysUntilDue: 0,
+    urgent: true,
+    nodeId: 'kp3',
+  },
+])
 
 const myCourses = computed(() => courseStore.myCourses)
 const currentCourseId = computed(() => userStore.currentCourseId)
@@ -181,6 +274,42 @@ const handleSwitchCourse = async (courseId: number) => {
 const handleLogout = () => {
   userStore.clearAuth()
   router.push('/login')
+}
+
+const handleMarkAllRead = () => {
+  reviewCount.value = 0
+  reviewItems.value = []
+  ElMessage.success('已全部标记为已读')
+}
+
+const handleReviewItemClick = (item: ReviewItem) => {
+  const course = courseStore.getCurrentCourse()
+  router.push({
+    path: `/course/${course?.id || 1}`,
+    query: { tab: 'graph', highlight: item.nodeId, nodeName: item.name }
+  })
+}
+
+const handleViewAllReview = () => {
+  router.push('/weak-points')
+}
+
+const handleGlobalSearch = () => {
+  const keyword = globalSearchKeyword.value.trim()
+  if (!keyword) return
+  if (route.path === '/dashboard') {
+    // On dashboard, dispatch custom event for course search
+    window.dispatchEvent(new CustomEvent('global-search', { detail: keyword }))
+  } else {
+    router.push({ path: '/dashboard', query: { search: keyword } })
+  }
+}
+
+const handleGlobalSearchClear = () => {
+  globalSearchKeyword.value = ''
+  if (route.path === '/dashboard') {
+    window.dispatchEvent(new CustomEvent('global-search', { detail: '' }))
+  }
 }
 
 onMounted(async () => {
@@ -373,14 +502,25 @@ onMounted(async () => {
   font-size: 13px;
 }
 
-/* ========== Navigation Pills ========== */
-.header-nav {
+/* ========== Navigation + Search ========== */
+.header-nav-area {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 8px;
   flex: 1;
   justify-content: center;
   padding: 0 8px;
+}
+
+.search-box {
+  width: 240px;
+}
+
+.global-search-input {
+  --el-input-bg-color: #f5f5f5;
+  --el-input-border-color: transparent;
+  --el-input-hover-border-color: #d9d9d9;
+  --el-input-focus-border-color: #1890ff;
 }
 
 .nav-pill {
@@ -392,6 +532,7 @@ onMounted(async () => {
   text-decoration: none;
   transition: all 0.2s;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .nav-pill:hover {
@@ -490,5 +631,139 @@ onMounted(async () => {
 
 .footer-sep {
   color: #d9d9d9;
+}
+
+/* ========== Review Reminder Popover ========== */
+.review-reminder {
+  max-height: 500px;
+}
+
+.reminder-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e4e7ed;
+  margin-bottom: 12px;
+}
+
+.reminder-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0;
+}
+
+.reminder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+.reminder-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.reminder-item:hover {
+  border-color: #409eff;
+  background: #f5f7fa;
+}
+
+.reminder-item-urgent {
+  border-left: 3px solid #f56c6c;
+  background: linear-gradient(135deg, #fef0f0 0%, #ffffff 100%);
+}
+
+.reminder-item-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #f5f7fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.reminder-item-urgent .reminder-item-icon {
+  background: linear-gradient(135deg, #fef0f0 0%, #fee 100%);
+}
+
+.reminder-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.reminder-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.reminder-item-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0;
+}
+
+.reminder-item-desc {
+  font-size: 13px;
+  color: #606266;
+  line-height: 1.5;
+  margin: 0 0 8px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.reminder-item-meta {
+  display: flex;
+  gap: 12px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.reminder-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #606266;
+}
+
+.reminder-empty p {
+  margin: 12px 0 0 0;
+  font-size: 14px;
+}
+
+.reminder-footer {
+  display: flex;
+  justify-content: center;
+  padding-top: 12px;
+  border-top: 1px solid #e4e7ed;
+  margin-top: 12px;
 }
 </style>

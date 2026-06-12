@@ -9,6 +9,44 @@
       </div>
     </section>
 
+    <!-- 功能快捷入口 -->
+    <section class="quick-access-section">
+      <h2 class="section-title">学习功能</h2>
+      <div class="quick-access-grid">
+        <div class="access-card" @click="router.push('/radar-chart')">
+          <div class="access-icon" style="background: linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%); color: #1890ff;">
+            <el-icon :size="32"><TrendCharts /></el-icon>
+          </div>
+          <h3 class="access-title">掌握度分析</h3>
+          <p class="access-desc">通过雷达图可视化展示各知识点掌握程度</p>
+        </div>
+        
+        <div class="access-card" @click="router.push('/weak-points')">
+          <div class="access-icon" style="background: linear-gradient(135deg, #fff7e6 0%, #ffe7ba 100%); color: #fa8c16;">
+            <el-icon :size="32"><WarningFilled /></el-icon>
+          </div>
+          <h3 class="access-title">薄弱点突破</h3>
+          <p class="access-desc">针对性复习掌握度低的知识点</p>
+        </div>
+        
+        <div class="access-card" @click="router.push('/recommendations')">
+          <div class="access-icon" style="background: linear-gradient(135deg, #f6ffed 0%, #b7eb8f 100%); color: #52c41a;">
+            <el-icon :size="32"><StarFilled /></el-icon>
+          </div>
+          <h3 class="access-title">智能推荐</h3>
+          <p class="access-desc">AI 推荐下一个最适合学习的知识点</p>
+        </div>
+        
+        <div class="access-card" @click="router.push('/learning-plan')">
+          <div class="access-icon" style="background: linear-gradient(135deg, #f0f5ff 0%, #d6e4ff 100%); color: #597ef7;">
+            <el-icon :size="32"><Calendar /></el-icon>
+          </div>
+          <h3 class="access-title">学习计划</h3>
+          <p class="access-desc">按天规划学习路径，循序渐进</p>
+        </div>
+      </div>
+    </section>
+
     <!-- 课程卡片网格 -->
     <section class="courses-section">
       <div class="course-grid" v-loading="loading">
@@ -58,7 +96,7 @@
 
           <!-- 底部按钮 -->
           <div class="card-footer">
-            <el-button type="primary" class="enter-btn">
+            <el-button type="primary" class="enter-btn" @click.stop="handleSelectCourse(course.id)">
               进入课程
               <el-icon class="enter-arrow"><ArrowRight /></el-icon>
             </el-button>
@@ -70,18 +108,27 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { ArrowRight, Reading, User } from '@element-plus/icons-vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { ArrowRight, Calendar, Reading, StarFilled, TrendCharts, User, WarningFilled } from '@element-plus/icons-vue'
 import { useCourseStore } from '@/stores/course'
 
 const router = useRouter()
+const route = useRoute()
 const courseStore = useCourseStore()
 
 const loading = ref(false)
+const searchKeyword = ref('')
 
-const allCourses = computed(() => courseStore.allCourses)
+const allCourses = computed(() => {
+  const keyword = searchKeyword.value.trim().toLowerCase()
+  if (!keyword) return courseStore.allCourses
+  return courseStore.allCourses.filter(
+    (c) =>
+      c.name.toLowerCase().includes(keyword) ||
+      (c.description && c.description.toLowerCase().includes(keyword))
+  )
+})
 
 const courseStudentCounts = [156, 203, 142, 128]
 const timeAgoLabels = ['2天前', '1天前', '5天前', '1周前']
@@ -112,26 +159,36 @@ const getProgress = (courseId: number) => {
   return myCourse?.progress ?? 0
 }
 
-const handleSelectCourse = async (courseId: number) => {
+const handleSelectCourse = (courseId: number) => {
+  console.log('handleSelectCourse called with courseId:', courseId)
   try {
-    const enrolled = courseStore.myCourses.some((c) => c.id === courseId)
-    if (!enrolled) {
-      await courseStore.enrollCourse(courseId)
-    }
-    await courseStore.switchCourse(courseId)
-    ElMessage.success('已进入课程')
-  } catch {
-    ElMessage.error('选课失败')
+    router.push('/course/' + courseId)
+  } catch (error) {
+    console.error('router.push error:', error)
   }
+}
+
+const handleGlobalSearch = (e: Event) => {
+  searchKeyword.value = (e as CustomEvent).detail || ''
 }
 
 onMounted(async () => {
   loading.value = true
   try {
+    // Check for search query in URL
+    const q = route.query.search
+    if (q && typeof q === 'string') {
+      searchKeyword.value = q
+    }
     await Promise.all([courseStore.fetchAllCourses(), courseStore.fetchMyCourses()])
   } finally {
     loading.value = false
   }
+  window.addEventListener('global-search', handleGlobalSearch)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('global-search', handleGlobalSearch)
 })
 </script>
 
@@ -166,6 +223,63 @@ onMounted(async () => {
 .hero-subtitle {
   font-size: 15px;
   color: #595959;
+  margin: 0;
+}
+
+/* ========== Quick Access ========== */
+.quick-access-section {
+  margin-bottom: 32px;
+}
+
+.section-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #262626;
+  margin: 0 0 20px 0;
+}
+
+.quick-access-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.access-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid #e8e8e8;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.access-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  border-color: #1890ff;
+}
+
+.access-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.access-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #262626;
+  margin: 0 0 8px 0;
+}
+
+.access-desc {
+  font-size: 13px;
+  color: #595959;
+  line-height: 1.6;
   margin: 0;
 }
 

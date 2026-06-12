@@ -27,9 +27,34 @@ const router = createRouter({
           component: () => import('@/views/Dashboard.vue'),
         },
         {
-          path: 'knowledge-graph',
-          name: 'KnowledgeGraph',
-          component: () => import('@/views/KnowledgeGraph.vue'),
+          path: 'assessment',
+          name: 'Assessment',
+          component: () => import('@/views/Assessment.vue'),
+        },
+        {
+          path: 'radar-chart',
+          name: 'RadarChart',
+          component: () => import('@/views/RadarChart.vue'),
+        },
+        {
+          path: 'weak-points',
+          name: 'WeakPoints',
+          component: () => import('@/views/WeakPoints.vue'),
+        },
+        {
+          path: 'recommendations',
+          name: 'Recommendations',
+          component: () => import('@/views/Recommendations.vue'),
+        },
+        {
+          path: 'learning-plan',
+          name: 'LearningPlan',
+          component: () => import('@/views/LearningPlan.vue'),
+        },
+        {
+          path: 'course/:courseId',
+          name: 'CourseDetail',
+          component: () => import('@/views/CourseDetail.vue'),
         },
       ],
     },
