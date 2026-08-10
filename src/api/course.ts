@@ -1,5 +1,5 @@
 import request from './request'
-import { mockGetAllCourses, mockGetMyCourses, mockEnrollCourse, mockSwitchCourse } from './mock-course'
+import { mockGetAllCourses, mockGetMyCourses, mockEnrollCourse, mockSwitchCourse, mockUnenrollCourse } from './mock-course'
 import type { Course, MyCourse } from '@/types/course'
 
 // 使用 Mock 数据（开发环境）
@@ -33,4 +33,11 @@ export const switchCurrentCourse = (courseId: number) => {
     return mockSwitchCourse(courseId)
   }
   return request.put<void, void>('/courses/current', { courseId })
+}
+
+export const unenrollCourse = (courseId: number) => {
+  if (USE_MOCK) {
+    return mockUnenrollCourse(courseId)
+  }
+  return request.delete<void, void>(`/courses/enroll/${courseId}`)
 }

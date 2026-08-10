@@ -3,7 +3,7 @@ import { mockLogin, mockRegister, mockGetCurrentUser } from './mock'
 import type { LoginParams, LoginResult, RegisterParams, UserInfo } from '@/types/user'
 
 // 使用 Mock 数据（开发环境）
-const USE_MOCK = true
+const USE_MOCK = false
 
 export const login = (params: LoginParams) => {
   if (USE_MOCK) {

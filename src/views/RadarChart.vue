@@ -1,9 +1,9 @@
 <template>
-  <div class="radar-page">
+  <div class="radar-page" :class="{ embedded: embedded }">
     <!-- 顶部导航 -->
     <div class="radar-header">
       <div class="header-left">
-        <el-button text @click="handleBack">
+        <el-button v-if="!embedded" text @click="handleBack">
           <el-icon><ArrowLeft /></el-icon>
           返回
         </el-button>
@@ -34,7 +34,18 @@
           </div>
         </div>
         
-        <div ref="chartContainer" class="chart-container" />
+        <div ref="chartContainer" class="chart-container">
+          <div v-if="error" class="empty-state">
+            <el-empty :description="error">
+              <el-button type="primary" @click="loadData">重试</el-button>
+            </el-empty>
+          </div>
+          <div v-else-if="knowledgePoints.length === 0 && !loading" class="empty-state">
+            <el-empty description="暂无诊断数据，请先完成答题以生成掌握度分析">
+              <el-button type="primary" @click="handleBack">返回学习</el-button>
+            </el-empty>
+          </div>
+        </div>
         
         <div class="radar-summary">
           <div class="summary-item">
@@ -118,6 +129,10 @@ interface KnowledgePoint {
   mastery: number
 }
 
+defineProps<{
+  embedded?: boolean
+}>()
+
 const router = useRouter()
 const courseStore = useCourseStore()
 const userStore = useUserStore()
@@ -127,31 +142,36 @@ const searchText = ref('')
 const chartInstance = ref<echarts.ECharts | null>(null)
 const chartContainer = ref<HTMLElement | null>(null)
 const loading = ref(false)
+const error = ref('')
 
 const knowledgePoints = ref<KnowledgePoint[]>([])
 
 const loadData = async () => {
   const course = courseStore.getCurrentCourse()
   const userId = userStore.userInfo?.id
-  if (!userId || !course) return
+  if (!userId || !course) {
+    error.value = '无法获取用户或课程信息，请确认已登录并选择了课程'
+    return
+  }
 
   loading.value = true
+  error.value = ''
   try {
     const data = await getRadar(userId, course.id)
-    knowledgePoints.value = data.map(item => ({
-      id: item.id,
-      name: item.name,
-      mastery: item.mastery,
-    }))
-    initChart()
+    knowledgePoints.value = data
+    if (data.length > 0) {
+      initChart()
+    }
   } catch (e: any) {
-    ElMessage.error(e?.message || '加载掌握度数据失败')
+    error.value = e?.message || '加载掌握度数据失败，请确认后端服务是否正常运行'
+    ElMessage.error(error.value)
   } finally {
     loading.value = false
   }
 }
 
 const averageMastery = computed(() => {
+  if (knowledgePoints.value.length === 0) return 0
   const total = knowledgePoints.value.reduce((sum, p) => sum + p.mastery, 0)
   return Math.round(total / knowledgePoints.value.length)
 })
@@ -212,7 +232,7 @@ const initChart = () => {
         max: 100
       })),
       center: ['50%', '50%'],
-      radius: '65%',
+      radius: '78%',
       axisName: {
         color: '#606266',
         fontSize: 12,
@@ -369,7 +389,7 @@ onMounted(() => {
 
 .chart-container {
   width: 100%;
-  height: 450px;
+  height: 600px;
   margin-bottom: 24px;
 }
 
@@ -567,5 +587,48 @@ onMounted(() => {
 
 .value-poor {
   color: #f56c6c;
+}
+
+.empty-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+  width: 100%;
+}
+
+/* 嵌套在 CourseDetail Tab 中的样式覆盖 */
+.radar-page.embedded {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.radar-page.embedded .radar-header {
+  margin-bottom: 16px;
+}
+
+.radar-page.embedded .radar-title {
+  font-size: 20px;
+}
+
+.radar-page.embedded .radar-content {
+  gap: 16px;
+}
+
+.radar-page.embedded .radar-card {
+  padding: 16px;
+  box-shadow: none;
+  border: 1px solid #e4e7ed;
+}
+
+.radar-page.embedded .chart-container {
+  height: 550px;
+}
+
+.radar-page.embedded .detail-list {
+  padding: 16px;
+  box-shadow: none;
+  border: 1px solid #e4e7ed;
 }
 </style>

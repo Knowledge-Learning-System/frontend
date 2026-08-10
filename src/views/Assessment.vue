@@ -3,13 +3,14 @@
     <!-- 顶部进度条 -->
     <div class="assessment-header">
       <div class="header-left">
-        <el-button plain @click="handleBack">
+        <el-button v-if="!embedded" plain @click="handleBack">
           <el-icon><ArrowLeft /></el-icon>
           返回
         </el-button>
         <span class="assessment-title">{{ nodeName }}</span>
       </div>
       <div class="header-right">
+        <el-button plain size="small" @click="showHistory = true" v-if="assessmentRecords.length">历史记录</el-button>
         <span class="question-counter">第 {{ currentQuestionIndex + 1 }} / {{ questions.length }} 题</span>
         <el-progress 
           :percentage="progressPercent" 
@@ -138,7 +139,6 @@
         <div class="result-actions">
           <el-button @click="handleRetry">重新答题</el-button>
           <el-button type="primary" @click="handleViewAnalysis">查看解析</el-button>
-          <el-button type="success" @click="handleBackToGraph">返回图谱</el-button>
         </div>
       </div>
 
@@ -160,11 +160,11 @@
           <div class="analysis-result">
             <div class="result-row">
               <span class="result-label">你的答案：</span>
-              <span class="result-value wrong">{{ Array.isArray(question.userAnswer) ? question.userAnswer.join(', ') : question.userAnswer }}</span>
+              <span class="result-value wrong">{{ formatAnswer(question, question.userAnswer!) }}</span>
             </div>
             <div class="result-row">
               <span class="result-label">正确答案：</span>
-              <span class="result-value correct">{{ Array.isArray(question.correctAnswer) ? question.correctAnswer.join(', ') : question.correctAnswer }}</span>
+              <span class="result-value correct">{{ formatAnswer(question, question.correctAnswer) }}</span>
             </div>
           </div>
           <div class="analysis-explanation">
@@ -178,10 +178,95 @@
       </div>
     </div>
   </div>
+
+  <!-- 历史记录弹窗 -->
+  <el-dialog v-model="showHistory" :title="viewingRecord ? '答题详情' : '测评历史记录'" width="700px" destroy-on-close @closed="viewingRecord = null">
+    <!-- 记录列表 -->
+    <div v-if="!viewingRecord">
+      <div v-if="assessmentRecords.length === 0" class="history-empty">暂无记录</div>
+      <div v-else class="history-list">
+        <div
+          v-for="record in assessmentRecords"
+          :key="record.id"
+          class="history-item"
+          @click="viewingRecord = record"
+        >
+          <div class="history-item-header">
+            <span class="history-date">{{ record.date }}</span>
+            <el-tag :type="record.accuracyRate >= 80 ? 'success' : record.accuracyRate >= 60 ? 'warning' : 'danger'" size="small">
+              {{ record.accuracyRate }}%
+            </el-tag>
+          </div>
+          <div class="history-item-body">
+            <span>正确 {{ record.correctCount }}/{{ record.totalQuestions }}</span>
+            <span>得分 {{ record.score }}/{{ record.totalScore }}</span>
+            <span>用时 {{ record.timeSpent }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 详情视图 -->
+    <div v-else>
+      <div class="detail-header">
+        <el-button plain size="small" @click="viewingRecord = null">
+          <el-icon><ArrowLeft /></el-icon>
+          返回列表
+        </el-button>
+        <span class="detail-date">{{ viewingRecord.date }}</span>
+      </div>
+      <div class="detail-summary">
+        <span>正确率 {{ viewingRecord.accuracyRate }}%</span>
+        <span>得分 {{ viewingRecord.score }}/{{ viewingRecord.totalScore }}</span>
+        <span>用时 {{ viewingRecord.timeSpent }}</span>
+      </div>
+      <div class="detail-questions" v-if="viewingRecord.questions?.length">
+        <div
+          v-for="(q, idx) in viewingRecord.questions"
+          :key="idx"
+          class="detail-question-item"
+          :class="{ 'detail-correct': isRecordQuestionCorrect(viewingRecord, idx), 'detail-wrong': !isRecordQuestionCorrect(viewingRecord, idx) }"
+        >
+          <div class="detail-q-header">
+            <span class="detail-q-num">{{ idx + 1 }}.</span>
+            <el-tag :type="q.type === 'single' ? 'primary' : 'warning'" size="small">
+              {{ q.type === 'single' ? '单选' : '多选' }}
+            </el-tag>
+            <el-tag :type="isRecordQuestionCorrect(viewingRecord, idx) ? 'success' : 'danger'" size="small">
+              {{ isRecordQuestionCorrect(viewingRecord, idx) ? '正确' : '错误' }}
+            </el-tag>
+          </div>
+          <p class="detail-q-text">{{ q.text }}</p>
+          <div class="detail-result-row">
+            <span class="detail-label">你的答案：</span>
+            <span :class="isRecordQuestionCorrect(viewingRecord, idx) ? 'text-correct' : 'text-wrong'">
+              {{ formatSnapshotAnswer(q, q.userAnswer!) }}
+            </span>
+          </div>
+          <div class="detail-result-row" v-if="!isRecordQuestionCorrect(viewingRecord, idx)">
+            <span class="detail-label">正确答案：</span>
+            <span class="text-correct">{{ formatSnapshotAnswer(q, q.correctAnswer) }}</span>
+          </div>
+        </div>
+      </div>
+      <div v-else class="history-empty">该记录暂无题目快照（可能是旧版本数据）</div>
+    </div>
+
+    <template #footer>
+      <template v-if="!viewingRecord">
+        <el-button @click="showHistory = false">关闭</el-button>
+        <el-button type="danger" plain @click="clearHistory" v-if="assessmentRecords.length">清空记录</el-button>
+      </template>
+      <template v-else>
+        <el-button @click="viewingRecord = null">返回列表</el-button>
+        <el-button @click="showHistory = false">关闭</el-button>
+      </template>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -198,12 +283,46 @@ interface Question {
   correctAnswer: string | string[]
   explanation: string
   userAnswer?: string | string[]
+  knowledgePointId?: string
 }
+
+interface AssessmentRecord {
+  id: string
+  title: string
+  date: string
+  totalQuestions: number
+  correctCount: number
+  score: number
+  totalScore: number
+  accuracyRate: number
+  timeSpent: string
+  questions: QuestionSnapshot[]
+}
+
+interface QuestionSnapshot {
+  id: string
+  type: 'single' | 'multiple'
+  text: string
+  options: { key: string; text: string }[]
+  correctAnswer: string | string[]
+  userAnswer?: string | string[]
+  explanation: string
+  knowledgePointId?: string
+}
+
+// localStorage key 前缀
+const HISTORY_KEY_PREFIX = 'assessment_history_'
+
+const props = defineProps<{
+  questions?: Question[]
+  title?: string
+  embedded?: boolean
+}>()
 
 const route = useRoute()
 const router = useRouter()
 
-const nodeName = ref(route.query.nodeName as string || '知识点测评')
+const nodeName = ref(props.title || (route.query.nodeName as string) || '知识点测评')
 const nodeId = ref(route.query.nodeId as string || '')
 
 // 默认硬编码 mock 题（fallback：当 nodeId 未匹配到数据时使用）
@@ -347,6 +466,7 @@ function convertQuestion(q: any): Question {
     options,
     correctAnswer: q.answer || '',
     explanation: q.analysis || '',
+    knowledgePointId: q.knowledgePointId || '',
   }
 }
 
@@ -355,6 +475,9 @@ const currentQuestionIndex = ref(0)
 const selectedAnswers = ref<string[]>([])
 const showResult = ref(false)
 const showAnalysis = ref(false)
+const showHistory = ref(false)
+const viewingRecord = ref<AssessmentRecord | null>(null)
+const assessmentRecords = ref<AssessmentRecord[]>([])
 const submitting = ref(false)
 const startTime = ref(Date.now())
 const timeSpent = ref('0 秒')
@@ -366,7 +489,7 @@ const progressPercent = computed(() => {
 })
 
 const score = ref(0)
-const totalScore = computed(() => questions.value.length * 5)
+const totalScore = computed(() => questions.value.length * 3)
 const correctCount = ref(0)
 const accuracyRate = computed(() => {
   return Math.round((correctCount.value / questions.value.length) * 100)
@@ -462,12 +585,13 @@ const handleSubmit = async () => {
   })
   
   correctCount.value = correct
-  score.value = correct * 5
+  score.value = correct * 3
   timeSpent.value = formatTimeSpent(Date.now() - startTime.value)
   
   setTimeout(() => {
     showResult.value = true
     submitting.value = false
+    saveRecord()
   }, 500)
 }
 
@@ -496,6 +620,36 @@ const handleViewAnalysis = () => {
   showAnalysis.value = true
 }
 
+/** 将答案字母转为 "A. 选项内容" 格式 */
+function formatAnswer(question: Question, answer: string | string[]): string {
+  if (!answer) return ''
+  const keys = Array.isArray(answer) ? answer : [answer]
+  return keys.map(key => {
+    const opt = question.options.find(o => o.key === key)
+    return opt ? `${key}. ${opt.text}` : key
+  }).join('，')
+}
+
+/** 将答案字母转为 "A. 选项内容" 格式（快照版） */
+function formatSnapshotAnswer(q: QuestionSnapshot, answer: string | string[]): string {
+  if (!answer) return '未作答'
+  const keys = Array.isArray(answer) ? answer : [answer]
+  return keys.map(key => {
+    const opt = q.options.find(o => o.key === key)
+    return opt ? `${key}. ${opt.text}` : key
+  }).join('，')
+}
+
+/** 判断记录中某题是否答对 */
+function isRecordQuestionCorrect(record: AssessmentRecord, idx: number): boolean {
+  const q = record.questions[idx]
+  if (!q || !q.userAnswer) return false
+  if (q.type === 'single') return q.userAnswer === q.correctAnswer
+  const userAns = Array.isArray(q.userAnswer) ? q.userAnswer : [q.userAnswer]
+  const correctAns = Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer]
+  return JSON.stringify(userAns.sort()) === JSON.stringify(correctAns.sort())
+}
+
 const handleBack = () => {
   router.back()
 }
@@ -513,28 +667,119 @@ const handleBackToGraph = () => {
   }
 }
 
+// --- 测评记录持久化 ---
+function getStorageKey(): string {
+  return HISTORY_KEY_PREFIX + (nodeId.value || props.title || nodeName.value)
+}
+
+function loadRecords(): AssessmentRecord[] {
+  try {
+    const raw = localStorage.getItem(getStorageKey())
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function saveRecord(): void {
+  const record: AssessmentRecord = {
+    id: Date.now().toString(36),
+    title: nodeName.value,
+    date: new Date().toLocaleString('zh-CN'),
+    totalQuestions: questions.value.length,
+    correctCount: correctCount.value,
+    score: score.value,
+    totalScore: totalScore.value,
+    accuracyRate: accuracyRate.value,
+    timeSpent: timeSpent.value,
+    questions: questions.value.map(q => ({
+      id: q.id,
+      type: q.type,
+      text: q.text,
+      options: q.options,
+      correctAnswer: q.correctAnswer,
+      userAnswer: q.userAnswer,
+      explanation: q.explanation,
+      knowledgePointId: q.knowledgePointId,
+    })),
+  }
+  const records = loadRecords()
+  records.unshift(record)
+  // 最多保留 20 条
+  if (records.length > 20) records.length = 20
+  localStorage.setItem(getStorageKey(), JSON.stringify(records))
+  assessmentRecords.value = records
+}
+
+function clearHistory(): void {
+  localStorage.removeItem(getStorageKey())
+  assessmentRecords.value = []
+  showHistory.value = false
+}
+
 onMounted(() => {
-  if (!nodeId.value) {
-    ElMessage.warning('未指定知识点，将使用默认题目')
+  assessmentRecords.value = loadRecords()
+  // 如果外部传入了题目，直接使用
+  if (props.questions && props.questions.length > 0) {
+    questions.value = props.questions
     return
   }
+  loadQuestionsForNode()
+})
 
+// 监听外部题目 prop 变化（切换章节时）
+watch(() => props.questions, (newQuestions) => {
+  if (newQuestions && newQuestions.length > 0) {
+    questions.value = newQuestions
+    resetAssessmentState()
+  }
+})
+
+// 监听路由 query 变化（切换知识点时重新加载题目与历史记录）
+watch(
+  () => route.query.nodeId,
+  (newNodeId) => {
+    if (!newNodeId || newNodeId === nodeId.value) return
+    nodeId.value = newNodeId as string
+    nodeName.value = (route.query.nodeName as string) || props.title || '知识点测评'
+    assessmentRecords.value = loadRecords()
+    resetAssessmentState()
+    loadQuestionsForNode()
+  },
+)
+
+function resetAssessmentState() {
+  currentQuestionIndex.value = 0
+  selectedAnswers.value = []
+  showResult.value = false
+  showAnalysis.value = false
+  startTime.value = Date.now()
+  score.value = 0
+  correctCount.value = 0
+}
+
+function loadQuestionsForNode() {
+  if (!nodeId.value) {
+    ElMessage.warning('未指定知识点，将使用默认题目')
+    questions.value = [...DEFAULT_QUESTIONS]
+    return
+  }
   const target = findSubTopic(MOCK_CHAPTERS as any[], nodeId.value)
   if (!target) {
     ElMessage.warning('未匹配到对应知识点，将使用默认题目')
+    questions.value = [...DEFAULT_QUESTIONS]
     return
   }
-
   const allRaw = collectQuestions(target)
   if (allRaw.length === 0) {
     ElMessage.warning('该知识点下暂无可测评题目，使用默认题目')
+    questions.value = [...DEFAULT_QUESTIONS]
     return
   }
-
   const shuffled = shuffle(allRaw)
   const selected = shuffled.slice(0, 10)
   questions.value = selected.map(convertQuestion)
-})
+}
 </script>
 
 <style scoped lang="css">
@@ -913,5 +1158,135 @@ onMounted(() => {
   color: #606266;
   line-height: 1.8;
   margin: 0;
+}
+
+/* 历史记录弹窗 */
+.history-empty {
+  text-align: center;
+  color: #909399;
+  padding: 40px 0;
+  font-size: 14px;
+}
+
+.history-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.history-item {
+  padding: 16px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.history-item:hover {
+  border-color: #409eff;
+}
+
+.history-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.history-date {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.history-item-body {
+  display: flex;
+  gap: 24px;
+  font-size: 13px;
+  color: #606266;
+}
+
+/* 历史详情视图 */
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.detail-date {
+  font-size: 14px;
+  color: #303133;
+  font-weight: 600;
+}
+
+.detail-summary {
+  display: flex;
+  gap: 24px;
+  padding: 12px 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  color: #606266;
+}
+
+.detail-questions {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.detail-question-item {
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  border-left: 4px solid #67c23a;
+}
+
+.detail-question-item.detail-wrong {
+  border-left-color: #f56c6c;
+}
+
+.detail-q-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.detail-q-num {
+  font-weight: 600;
+  font-size: 15px;
+  color: #303133;
+}
+
+.detail-q-text {
+  font-size: 14px;
+  color: #303133;
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.detail-result-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.detail-label {
+  color: #909399;
+  white-space: nowrap;
+}
+
+.text-correct {
+  color: #67c23a;
+  font-weight: 500;
+}
+
+.text-wrong {
+  color: #f56c6c;
+  font-weight: 500;
 }
 </style>

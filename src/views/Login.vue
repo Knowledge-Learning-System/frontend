@@ -19,7 +19,7 @@
               <path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" fill="none"/>
             </svg>
           </div>
-          <h1 class="login-title">智能在线学习系统</h1>
+          <h1 class="login-title">高校个性化在线学习系统</h1>
           <p class="login-subtitle">融合学科知识图谱与大语言模型的高校个性化在线学习平台</p>
         </div>
 

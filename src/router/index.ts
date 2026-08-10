@@ -56,6 +56,36 @@ const router = createRouter({
           name: 'CourseDetail',
           component: () => import('@/views/CourseDetail.vue'),
         },
+        {
+          path: 'notes',
+          name: 'NotesManagement',
+          component: () => import('@/views/NotesManagement.vue'),
+        },
+        {
+          path: 'search',
+          name: 'SearchPage',
+          component: () => import('@/views/SearchPage.vue'),
+        },
+        {
+          path: 'personal-center',
+          name: 'PersonalCenter',
+          component: () => import('@/views/PersonalCenter.vue'),
+        },
+        {
+          path: 'my-courses',
+          name: 'MyCourses',
+          component: () => import('@/views/MyCourses.vue'),
+        },
+        {
+          path: 'settings',
+          name: 'Settings',
+          component: () => import('@/views/Settings.vue'),
+        },
+        {
+          path: 'qa',
+          name: 'QA',
+          component: () => import('@/views/QAPage.vue'),
+        },
       ],
     },
   ],

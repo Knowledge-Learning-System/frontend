@@ -29,3 +29,7 @@ export const getCourseware = (courseId?: number, knowledgePointId?: string) => {
     params: { courseId, knowledgePointId },
   })
 }
+
+export const trackCoursewareAccess = (params: { knowledgePointId: string; courseId: number }) => {
+  return request.post('/resources/courseware/access', params)
+}

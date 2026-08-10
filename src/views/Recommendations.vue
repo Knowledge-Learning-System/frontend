@@ -3,7 +3,7 @@
     <!-- 顶部 -->
     <div class="rec-header">
       <div class="header-left">
-        <el-button text @click="handleBack">
+        <el-button v-if="!embedded" text @click="handleBack">
           <el-icon><ArrowLeft /></el-icon>
           返回
         </el-button>
@@ -40,8 +40,13 @@
     <!-- 推荐列表 -->
     <div class="rec-content">
       <div class="rec-list" v-loading="loading">
-        <div v-if="recommendations.length === 0" class="empty-state">
-          <el-empty description="暂无推荐，当前知识点已全部掌握">
+        <div v-if="error" class="empty-state">
+          <el-empty :description="error">
+            <el-button type="primary" @click="loadData">重试</el-button>
+          </el-empty>
+        </div>
+        <div v-else-if="recommendations.length === 0 && !loading" class="empty-state">
+          <el-empty description="暂无推荐数据，请先完成答题以生成学习分析">
             <el-button type="primary" @click="handleBack">返回学习</el-button>
           </el-empty>
         </div>
@@ -68,9 +73,6 @@
                 优先学习
               </div>
               <h3 class="rec-name">{{ item.name }}</h3>
-              <el-tag :type="getDifficultyTag(item.difficulty ?? 2)" size="small">
-                {{ getDifficultyLabel(item.difficulty ?? 2) }}
-              </el-tag>
             </div>
 
             <!-- 描述 -->
@@ -84,19 +86,15 @@
               </span>
               <span class="meta-item">
                 <el-icon><Document /></el-icon>
-                前置知识：{{ item.prerequisites?.length ?? 0 }} 个
-              </span>
-              <span class="meta-item">
-                <el-icon><Clock /></el-icon>
-                预计用时：{{ item.estimatedTime ?? 30 }}分钟
+                前置知识：{{ item.prerequisites.length }} 个
               </span>
             </div>
 
             <!-- 前置知识点 -->
-            <div v-if="(item.prerequisites ?? []).length > 0" class="rec-prereqs">
+            <div v-if="item.prerequisites.length > 0" class="rec-prereqs">
               <span class="prereqs-label">前置知识：</span>
               <el-tag
-                v-for="prereq in (item.prerequisites ?? [])"
+                v-for="prereq in item.prerequisites"
                 :key="prereq"
                 size="small"
                 type="info"
@@ -110,13 +108,13 @@
             <div class="rec-progress">
               <div class="progress-label">
                 <span>当前掌握度</span>
-                <span>{{ item.currentMastery ?? 0 }}%</span>
+                <span>{{ item.masteryLevel }}%</span>
               </div>
               <el-progress
-                :percentage="item.currentMastery ?? 0"
+                :percentage="item.masteryLevel"
                 :stroke-width="6"
                 :show-text="false"
-                :color="getProgressColor(item.currentMastery ?? 0)"
+                :color="getProgressColor(item.masteryLevel)"
               />
             </div>
           </div>
@@ -176,10 +174,12 @@
 </template>
 
 <script setup lang="ts">
+defineProps<{ embedded?: boolean }>()
+
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  Aim, ArrowLeft, Clock, Document, Folder, Sunny, Promotion,
+  Aim, ArrowLeft, Document, Folder, Sunny, Promotion,
   Refresh, RefreshRight, StarFilled, TrendCharts, VideoPlay,
 } from '@element-plus/icons-vue'
 import { getRecommendations } from '@/api/study'
@@ -192,10 +192,8 @@ interface RecommendationItem {
   name: string
   description: string
   reason: string
-  difficulty?: number
-  prerequisites?: string[]
-  estimatedTime?: number
-  currentMastery?: number
+  prerequisites: string[]
+  masteryLevel: number
 }
 
 const router = useRouter()
@@ -203,26 +201,26 @@ const courseStore = useCourseStore()
 const userStore = useUserStore()
 
 const loading = ref(false)
+const error = ref('')
 
 const recommendations = ref<RecommendationItem[]>([])
 
 const loadData = async () => {
   const course = courseStore.getCurrentCourse()
   const userId = userStore.userInfo?.id
-  if (!userId || !course) return
+  if (!userId || !course) {
+    error.value = '无法获取用户或课程信息，请确认已登录并选择了课程'
+    return
+  }
 
   loading.value = true
+  error.value = ''
   try {
     const data = await getRecommendations(userId, course.id)
-    recommendations.value = data.map(item => ({
-      ...item,
-      difficulty: 2,
-      prerequisites: [],
-      estimatedTime: 30,
-      currentMastery: 0,
-    }))
+    recommendations.value = data
   } catch (e: any) {
-    ElMessage.error(e?.message || '加载推荐失败')
+    error.value = e?.message || '加载推荐失败，请确认后端服务是否正常运行'
+    ElMessage.error(error.value)
   } finally {
     loading.value = false
   }
@@ -231,23 +229,6 @@ const loadData = async () => {
 onMounted(() => {
   loadData()
 })
-
-const getDifficultyTag = (difficulty: number) => {
-  if (difficulty === 1) return 'success'
-  if (difficulty === 2) return ''
-  if (difficulty === 3) return 'warning'
-  return 'danger'
-}
-
-const getDifficultyLabel = (difficulty: number) => {
-  const labels: Record<number, string> = {
-    1: '简单',
-    2: '中等',
-    3: '困难',
-    4: '专家',
-  }
-  return labels[difficulty] || '未知'
-}
 
 const getProgressColor = (percentage: number) => {
   if (percentage < 30) return '#f56c6c'

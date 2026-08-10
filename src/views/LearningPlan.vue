@@ -122,7 +122,7 @@
                     :color="task.completed ? '#67c23a' : '#dcdfe6'"
                   >
                     <CircleCheckFilled v-if="task.completed" />
-                    <CircleOutline v-else />
+                    <span v-else class="empty-circle" />
                   </el-icon>
                 </div>
 
@@ -198,7 +198,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   ArrowLeft, ArrowRight, Calendar, CircleCheck, CircleCheckFilled,
-  CircleOutline, Clock, Document, Download, Refresh, TrendCharts, VideoPlay,
+  Clock, Document, Download, Refresh, TrendCharts, VideoPlay,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getStudyPlan } from '@/api/study'
@@ -426,6 +426,15 @@ const handleReviewTask = (task: Task) => {
   min-height: 100vh;
   background: #f5f7fa;
   padding: 20px;
+}
+
+.empty-circle {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #dcdfe6;
+  border-radius: 50%;
+  box-sizing: border-box;
 }
 
 .plan-header {

@@ -13,7 +13,7 @@
                 <path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" fill="none"/>
               </svg>
             </div>
-            <span class="logo-text">智能在线学习系统</span>
+            <span class="logo-text">高校个性化在线学习系统</span>
           </router-link>
         </div>
 
@@ -61,17 +61,101 @@
 
         <!-- 中间搜索区 -->
         <div class="header-nav-area">
-          <div class="search-box">
-            <el-input
-              v-model="globalSearchKeyword"
-              placeholder="搜索课程、知识点..."
-              clearable
-              :prefix-icon="Search"
-              class="global-search-input"
-              @keyup.enter="handleGlobalSearch"
-              @clear="handleGlobalSearchClear"
-            />
-          </div>
+          <el-popover
+            ref="searchPopoverRef"
+            placement="bottom"
+            :width="500"
+            trigger="click"
+            :show-arrow="false"
+            popper-class="search-dropdown-popover"
+          >
+            <template #reference>
+              <el-input
+                v-model="searchPanelQuery"
+                placeholder="搜索课程、知识点..."
+                prefix-icon="Search"
+                size="default"
+                clearable
+                class="search-input-box"
+                @input="onSearchInput"
+                @keyup.enter="onSearchInput"
+                @clear="searchResults = []"
+              />
+            </template>
+            <div class="search-dropdown">
+              <!-- 有输入内容 → 展示搜索结果 -->
+              <template v-if="searchPanelQuery.trim()">
+                <div v-if="searchLoading" class="search-loading">
+                  <el-icon class="is-loading"><Loading /></el-icon>
+                  <span>搜索中...</span>
+                </div>
+                <template v-else-if="searchResults.length > 0">
+                  <div class="search-dropdown-results">
+                    <div
+                      v-for="item in searchResults"
+                      :key="item.id"
+                      class="search-result-item"
+                      @click="handleResultClick(item)"
+                    >
+                      <div class="search-result-icon">
+                        <el-icon v-if="item.type === 'video'"><VideoCamera /></el-icon>
+                        <el-icon v-else><Document /></el-icon>
+                      </div>
+                      <div class="search-result-info">
+                        <div class="search-result-title">{{ item.title }}</div>
+                        <div class="search-result-meta">
+                          <span class="search-result-type">{{ item.type === 'video' ? '视频' : '文档' }}</span>
+                          <span v-if="item.knowledgePointName" class="search-result-kp">{{ item.knowledgePointName }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="search-dropdown-section-action-bar">
+                    <span class="search-dropdown-section-action" @click="handleSearchSubmit">查看全部结果 <el-icon><ArrowRight /></el-icon></span>
+                  </div>
+                </template>
+                <div v-else class="search-empty">无相关结果</div>
+              </template>
+
+              <!-- 无输入 → 展示历史 + 热门 -->
+              <template v-else>
+                <template v-if="searchHistory.length > 0">
+                  <div class="search-dropdown-section">
+                    <div class="search-dropdown-section-header">
+                      <span class="search-dropdown-section-title">搜索历史</span>
+                      <span class="search-dropdown-section-action" @click="clearSearchHistory">清空</span>
+                    </div>
+                    <div class="search-dropdown-tags">
+                      <span
+                        v-for="(item, idx) in searchHistory"
+                        :key="idx"
+                        class="search-tag history-tag"
+                        @click="handleSearchTagClick(item)"
+                      >{{ item }}</span>
+                    </div>
+                  </div>
+                </template>
+                <div class="search-dropdown-section">
+                  <div class="search-dropdown-section-header">
+                    <span class="search-dropdown-section-title">热门搜索</span>
+                  </div>
+                  <div class="search-dropdown-tags">
+                    <span
+                      v-for="(item, idx) in hotSearchTerms"
+                      :key="idx"
+                      class="search-tag"
+                      :class="{ 'hot-tag': idx < 3 }"
+                      @click="handleSearchTagClick(item)"
+                    >{{ item }}</span>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </el-popover>
+          <el-button class="qa-global-btn" @click="router.push('/qa')">
+            <el-icon><ChatDotRound /></el-icon>
+            <span>问答</span>
+          </el-button>
         </div>
 
         <!-- 右侧用户操作区 -->
@@ -146,7 +230,7 @@
           </el-popover>
 
           <!-- 用户头像下拉 -->
-          <el-dropdown trigger="click">
+          <el-dropdown trigger="click" @command="handleUserCommand">
             <span class="user-trigger">
               <el-avatar :size="32" class="user-avatar">
                 {{ userInitial }}
@@ -156,11 +240,11 @@
             </span>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item>
+                <el-dropdown-item command="personal-center">
                   <el-icon><User /></el-icon>
                   个人中心
                 </el-dropdown-item>
-                <el-dropdown-item>
+                <el-dropdown-item command="settings">
                   <el-icon><Setting /></el-icon>
                   设置
                 </el-dropdown-item>
@@ -186,6 +270,7 @@
       <span class="footer-sep">|</span>
       <span>版权所有 · 技术支持</span>
     </footer>
+
   </div>
 </template>
 
@@ -193,11 +278,13 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  ArrowDown, ArrowRight, Bell, CircleCheckFilled, Clock, Document, Plus, Reading,
-  Search, Setting, SwitchButton, User, WarningFilled,
+  ArrowDown, ArrowRight, Bell, ChatDotRound, CircleCheckFilled, Clock, Document, Loading, Plus, Reading,
+  Search, Setting, SwitchButton, User, VideoCamera, WarningFilled,
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useCourseStore } from '@/stores/course'
+import { getReminders } from '@/api/study'
+import { search, type SearchResult } from '@/api/search'
 import { ElMessage } from 'element-plus'
 
 const route = useRoute()
@@ -206,8 +293,8 @@ const userStore = useUserStore()
 const courseStore = useCourseStore()
 
 const unreadCount = ref(2)
-const reviewCount = ref(3)
-const globalSearchKeyword = ref('')
+const reviewCount = ref(0)
+const reviewLoading = ref(false)
 
 interface ReviewItem {
   id: string
@@ -219,35 +306,33 @@ interface ReviewItem {
   nodeId: string
 }
 
-const reviewItems = ref<ReviewItem[]>([
-  {
-    id: 'r1',
-    name: '软件测试基础',
-    description: '根据艾宾浩斯遗忘曲线，该知识点需要复习',
-    mastery: 45,
-    daysUntilDue: 1,
-    urgent: true,
-    nodeId: 'kp5',
-  },
-  {
-    id: 'r2',
-    name: '需求分析方法',
-    description: '已学习 3 天，建议及时复习巩固',
-    mastery: 58,
-    daysUntilDue: 2,
-    urgent: false,
-    nodeId: 'kp2',
-  },
-  {
-    id: 'r3',
-    name: '系统设计基础',
-    description: '掌握度较低，需要加强复习',
-    mastery: 35,
-    daysUntilDue: 0,
-    urgent: true,
-    nodeId: 'kp3',
-  },
-])
+const reviewItems = ref<ReviewItem[]>([])
+
+async function fetchReviewReminders() {
+  const userId = userStore.userInfo?.id
+  const cid = currentCourseId.value
+  if (!userId || !cid) return
+
+  reviewLoading.value = true
+  try {
+    const reminders = await getReminders(userId, cid)
+    reviewItems.value = reminders.map((r) => ({
+      id: r.id,
+      name: r.name,
+      description: `错题 ${r.errorCount} 次，上次答题 ${r.lastAttemptDaysAgo} 天前`,
+      mastery: 0,
+      daysUntilDue: Math.max(0, 3 - r.lastAttemptDaysAgo),
+      urgent: r.errorCount >= 5,
+      nodeId: r.id,
+    }))
+    reviewCount.value = reviewItems.value.length
+  } catch {
+    reviewItems.value = []
+    reviewCount.value = 0
+  } finally {
+    reviewLoading.value = false
+  }
+}
 
 const myCourses = computed(() => courseStore.myCourses)
 const currentCourseId = computed(() => userStore.currentCourseId)
@@ -266,6 +351,7 @@ const handleSwitchCourse = async (courseId: number) => {
   if (courseId === currentCourseId.value) return
   try {
     await courseStore.switchCourse(courseId)
+    await fetchReviewReminders()
   } catch {
     // ignore
   }
@@ -274,6 +360,14 @@ const handleSwitchCourse = async (courseId: number) => {
 const handleLogout = () => {
   userStore.clearAuth()
   router.push('/login')
+}
+
+const handleUserCommand = (command: string) => {
+  if (command === 'personal-center') {
+    router.push('/personal-center')
+  } else if (command === 'settings') {
+    router.push('/settings')
+  }
 }
 
 const handleMarkAllRead = () => {
@@ -290,26 +384,107 @@ const handleReviewItemClick = (item: ReviewItem) => {
   })
 }
 
+// ========== 搜索下拉面板 ==========
+const SEARCH_HISTORY_KEY = 'search_history'
+const MAX_HISTORY = 8
+
+const searchPopoverRef = ref()
+const searchPanelQuery = ref('')
+const searchLoading = ref(false)
+const searchResults = ref<SearchResult[]>([])
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+
+const hotSearchTerms = ref([
+  '机器学习', '数据结构', '知识图谱', '大语言模型',
+  '数据库原理', '计算机网络', 'Python', '线性代数',
+])
+
+const searchHistory = ref<string[]>([])
+
+function loadSearchHistory() {
+  try {
+    const raw = localStorage.getItem(SEARCH_HISTORY_KEY)
+    searchHistory.value = raw ? JSON.parse(raw) : []
+  } catch {
+    searchHistory.value = []
+  }
+}
+
+function saveSearchHistory(query: string) {
+  searchHistory.value = [
+    query,
+    ...searchHistory.value.filter((q) => q !== query),
+  ].slice(0, MAX_HISTORY)
+  localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(searchHistory.value))
+}
+
+function clearSearchHistory() {
+  searchHistory.value = []
+  localStorage.removeItem(SEARCH_HISTORY_KEY)
+}
+
+function handleSearchTagClick(tag: string) {
+  searchPanelQuery.value = tag
+  doSearch()
+}
+
+function onSearchInput() {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  const query = searchPanelQuery.value.trim()
+  if (!query) {
+    searchResults.value = []
+    return
+  }
+  searchDebounceTimer = setTimeout(() => doSearch(), 300)
+}
+
+async function doSearch() {
+  const query = searchPanelQuery.value.trim()
+  if (!query) return
+  searchLoading.value = true
+  try {
+    const res = await search({ keyword: query })
+    searchResults.value = [...res.videos, ...res.documents, ...res.links]
+  } catch {
+    searchResults.value = []
+  } finally {
+    searchLoading.value = false
+  }
+}
+
+function handleResultClick(item: SearchResult) {
+  saveSearchHistory(item.title)
+  searchPopoverRef.value?.hide()
+  searchPanelQuery.value = ''
+  searchResults.value = []
+  if (item.courseId) {
+    const query: Record<string, string> = {
+      knowledgePointId: item.knowledgePointId || '',
+      highlight: item.knowledgePointId || '',
+    }
+    if (item.type === 'video') {
+      query.tab = 'videos'
+      query.videoId = String(item.id)
+    } else {
+      query.tab = 'courseware'
+    }
+    router.push({ path: `/course/${item.courseId}`, query })
+  }
+}
+
+function handleSearchSubmit() {
+  const query = searchPanelQuery.value.trim()
+  if (!query) return
+  saveSearchHistory(query)
+  searchPopoverRef.value?.hide()
+  const q = searchPanelQuery.value
+  searchPanelQuery.value = ''
+  searchResults.value = []
+  router.push('/search?q=' + encodeURIComponent(q))
+}
+
 const handleViewAllReview = () => {
   router.push('/weak-points')
-}
-
-const handleGlobalSearch = () => {
-  const keyword = globalSearchKeyword.value.trim()
-  if (!keyword) return
-  if (route.path === '/dashboard') {
-    // On dashboard, dispatch custom event for course search
-    window.dispatchEvent(new CustomEvent('global-search', { detail: keyword }))
-  } else {
-    router.push({ path: '/dashboard', query: { search: keyword } })
-  }
-}
-
-const handleGlobalSearchClear = () => {
-  globalSearchKeyword.value = ''
-  if (route.path === '/dashboard') {
-    window.dispatchEvent(new CustomEvent('global-search', { detail: '' }))
-  }
 }
 
 onMounted(async () => {
@@ -317,6 +492,8 @@ onMounted(async () => {
     await userStore.fetchUserInfo()
   }
   await courseStore.fetchMyCourses()
+  loadSearchHistory()
+  await fetchReviewReminders()
 })
 </script>
 
@@ -512,15 +689,189 @@ onMounted(async () => {
   padding: 0 8px;
 }
 
-.search-box {
-  width: 240px;
+.search-input-box {
+  width: 320px;
+  flex-shrink: 0;
 }
 
-.global-search-input {
-  --el-input-bg-color: #f5f5f5;
-  --el-input-border-color: transparent;
-  --el-input-hover-border-color: #d9d9d9;
-  --el-input-focus-border-color: #1890ff;
+/* ========== 搜索下拉面板 ========== */
+.search-dropdown {
+  padding: 4px 0;
+}
+
+.search-dropdown-section {
+  padding: 0 12px;
+  margin-top: 8px;
+}
+
+.search-dropdown-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.search-dropdown-section-title {
+  font-size: 13px;
+  color: #8c8c8c;
+}
+
+.search-dropdown-section-action {
+  font-size: 12px;
+  color: #999;
+  cursor: pointer;
+}
+
+.search-dropdown-section-action:hover {
+  color: #409eff;
+}
+
+.search-dropdown-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.search-tag {
+  display: inline-block;
+  padding: 4px 12px;
+  font-size: 13px;
+  color: #606266;
+  background: #f5f7fa;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.search-tag:hover {
+  background: #e6efff;
+  color: #409eff;
+}
+
+.search-tag.hot-tag {
+  color: #f56c6c;
+  background: #fef0f0;
+}
+
+.search-tag.hot-tag:hover {
+  color: #fff;
+  background: #f56c6c;
+}
+
+.search-tag.history-tag {
+  color: #606266;
+  background: #f5f7fa;
+}
+
+/* ========== 搜索结果列表 ========== */
+.search-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 12px;
+  color: #8c8c8c;
+  font-size: 13px;
+}
+
+.search-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: #bfbfbf;
+  font-size: 13px;
+}
+
+.search-dropdown-results {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.search-result-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.search-result-item:hover {
+  background: #f5f7fa;
+}
+
+.search-result-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e6efff;
+  border-radius: 6px;
+  color: #409eff;
+  font-size: 16px;
+  margin-top: 2px;
+}
+
+.search-result-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.search-result-title {
+  font-size: 14px;
+  color: #303133;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-result-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.search-result-type {
+  color: #909399;
+  background: #f5f7fa;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.search-result-kp {
+  color: #909399;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-dropdown-section-action-bar {
+  padding: 8px 12px;
+  border-top: 1px solid #f0f0f0;
+  text-align: center;
+}
+
+.search-dropdown-section-action-bar .search-dropdown-section-action {
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.qa-global-btn {
+  flex-shrink: 0;
+  height: 36px;
+  border-radius: 8px;
+}
+
+.qa-global-dialog-body {
+  height: 60vh;
+  min-height: 400px;
 }
 
 .nav-pill {

@@ -1,7 +1,7 @@
 import request from './request'
 import type { KnowledgeGraphData, KnowledgePointDetail, LearningPathItem, RecommendationItem, QASearchResult, SubTopicVO, GraphNode, GraphLink } from '@/types/knowledgeGraph'
 
-const USE_MOCK = true
+const USE_MOCK = false
 
 // ===== Mock 数据：从 Neo4j + MySQL 查询的课程 4（数据库系统原理）章节结构 =====
 export const MOCK_CHAPTERS: SubTopicVO[] = [
@@ -30,21 +30,17 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
               ],
               questions: [
                 {id: 1, type: 'single', content: '一个抽象类型包括数据对象、和一组处理数据的操作。', options: '["A. 数据对象中各元素间的结构关系", "B. 数据元素集", "C. 接口", "D. 数据对象集"]', answer: 'A', analysis: '【所属章节：第1讲 数据结构的基础概念】', knowledgePointId: '6320775'},
-                {id: 2, type: 'single', content: '抽象数据类型具有 、信息隐蔽的特点。', options: '[]', answer: '', analysis: '【所属章节：第1讲 数据结构的基础概念】', knowledgePointId: '6320775'},
                 {id: 3, type: 'single', content: '线性表是具有n个（）的有限序列（n>0）', options: '["A. 数据对象", "B. 数据元素", "C. 字符", "D. 数据项"]', answer: 'B', analysis: '【所属章节：第1讲 线性表的概念】', knowledgePointId: '6320775'},
                 {id: 4, type: 'single', content: '线性表是一个（  ）。', options: '["A. 有限序列，可以为空", "B. 有限序列，不可以为空", "C. 无限序列，可以为空", "D. 无限序列，可以为空"]', answer: 'A', analysis: '【所属章节：第1讲 线性表的概念】', knowledgePointId: '6320775'},
                 {id: 5, type: 'judge', content: '线性表的特点是每个元素都有一个前驱和一个后继。（）', options: '["A. 正确", "B. 错误"]', answer: 'B', analysis: '【所属章节：第1讲 线性表的概念】', knowledgePointId: '6320775'},
                 {id: 6, type: 'judge', content: '线性结构只能用顺序结构来存放，非线性结构只能用非顺序结构来存放。（ ）', options: '["A. 正确", "B. 错误"]', answer: 'B', analysis: '【所属章节：第2讲 数据结构的内容】', knowledgePointId: '6320775'},
-                {id: 7, type: 'single', content: '1、数据结构的逻辑结构分为集合、线性、层次和 四种。', options: '[]', answer: '', analysis: '【所属章节：第2讲 数据结构的内容】', knowledgePointId: '6320775'},
-                {id: 8, type: 'single', content: '2、数据结构的存储结构分为 和非顺序两种。', options: '[]', answer: '', analysis: '【所属章节：第2讲 数据结构的内容】', knowledgePointId: '6320775'},
-                {id: 9, type: 'single', content: '3、在线性结构、树形结构和图结构中，数据元素之间分别存在着一对一、一对多和  联系。', options: '[]', answer: '', analysis: '【所属章节：第2讲 数据结构的内容】', knowledgePointId: '6320775'},
                 {id: 10, type: 'single', content: '若长度为n的线性表采用顺序存储结构，在其第i个位置插入一个新元素的算法的时间复杂度为（ ）(1<=i<=n+1)。', options: '["A. O(1)", "B. O(n)", "C. O(n*n)", "D. O（）"]', answer: 'B', analysis: '【所属章节：第2讲 线性表的顺序存储】', knowledgePointId: '6320775'},
                 {id: 11, type: 'single', content: '若长度为n的线性表采用顺序存储结构，删除第i个位置的元素，需要移动的元素个数为（  ）。', options: '["A. i", "B. n-i", "C. n-i+1", "D. n-i-1"]', answer: 'B', analysis: '【所属章节：第2讲 线性表的顺序存储】', knowledgePointId: '6320775'},
                 {id: 12, type: 'single', content: '当需要用一个形式参数直接改变对应实参的值时，该形式参数应说明为。', options: '["A. 与实参同类型指针参数", "B. 不需要参数", "C. 与实参同类型的参数", "D. 全局变量"]', answer: 'A', analysis: '【所属章节：第3讲 数据结构与c语言表示】', knowledgePointId: '6320775'},
-                {id: 13, type: 'single', content: '对一个长度为n的顺序表，假设在任何位置上插入一个元素的概率是相等的，那么插入一个元素时要移动表中的（  ）个元素。', options: '["A. n", "B. n+1", "C. （选项）", "D. （选项）"]', answer: 'C', analysis: '【所属章节：第3讲 线性表顺序结构应用示例及小结】', knowledgePointId: '6320775'},
+                {id: 13, type: 'single', content: '对一个长度为n的顺序表，假设在任何位置上插入一个元素的概率是相等的，那么插入一个元素时要移动表中的（  ）个元素。', options: '["A. n", "B. n+1", "C. n/2", "D. n(n+1)/2"]', answer: 'C', analysis: '【所属章节：第3讲 线性表顺序结构应用示例及小结】', knowledgePointId: '6320775'},
                 {id: 14, type: 'judge', content: '线性表的顺序存储是指将表中元素按照从大到小或从小到大存储。', options: '["A. 正确", "B. 错误"]', answer: 'B', analysis: '【所属章节：第3讲 线性表顺序结构应用示例及小结】', knowledgePointId: '6320775'},
                 {id: 15, type: 'single', content: '1、执行下面的程序段的时间复杂度为 。for(int i=0;i<m;i++) for(int j=0;j<n;j++) a[i][j]=i*j;', options: '["A. O()", "B. O()", "C. O(m*n)", "D. O (m+n)"]', answer: 'C', analysis: '【所属章节：第4讲 算法性能评价】', knowledgePointId: '6320775'},
-                {id: 16, type: 'single', content: '2、执行下面程序段时，语句S的执行次数为 。for(int i=0;i<=n;i++) for(int j=0;j<i;j++) S;', options: '["A. （选项）", "B. （选项）", "C. n(n+1)", "D. （选项）"]', answer: 'D', analysis: '【所属章节：第4讲 算法性能评价】', knowledgePointId: '6320775'},
+                {id: 16, type: 'single', content: '2、执行下面程序段时，语句S的执行次数为 。for(int i=0;i<=n;i++) for(int j=0;j<i;j++) S;', options: '["A. n^2", "B. n(n-1)/2", "C. n(n+1)", "D. n(n+1)/2"]', answer: 'D', analysis: '【所属章节：第4讲 算法性能评价】', knowledgePointId: '6320775'},
                 {id: 17, type: 'single', content: '通过表达式可以获取带头结点的单链表L中首元素结点的数据值。', options: '["A. L->next", "B. (L->next)->data", "C. L->data", "D. L->next"]', answer: 'B', analysis: '【所属章节：第4讲 线性表的链式存储】', knowledgePointId: '6320775'},
                 {id: 18, type: 'judge', content: '单链表中必须设有头结点。（）', options: '["A. 正确", "B. 错误"]', answer: 'B', analysis: '【所属章节：第4讲 线性表的链式存储】', knowledgePointId: '6320775'},
                 {id: 19, type: 'single', content: '下列选项中， 项是链表不具有的特点。', options: '["A. 插入和删除运算不需要移动元素", "B. 所需要的存储空间与线性表的长度成正比", "C. 不必事先估计存储空间大小", "D. 可以随机访问表中的任意元素"]', answer: 'D', analysis: '【所属章节：第5讲 单链表的基本运算】', knowledgePointId: '6320775'},
@@ -125,8 +121,6 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
                 {id: 110, type: 'judge', content: '如果数据库的内模式变化，只要对模式／内模式映射作相应的修改，模式可以保持不变，这是数据物理独立性。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第三节 数据库管理系统】', knowledgePointId: '6320775'},
                 {id: 111, type: 'judge', content: '数据字典中存放元数据，比如数据模式、外模式等。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第三节 数据库管理系统】', knowledgePointId: '6320775'},
                 {id: 113, type: 'judge', content: '日志登记对数据的修改。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第三节 数据库管理系统】', knowledgePointId: '6320775'},
-                {id: 115, type: 'single', content: '数据抽象中，（ ）层从某个或某类用户角度出发，只描述与其相关的那部分数据。', options: '[]', answer: '', analysis: '【所属章节：第三节 数据库管理系统】', knowledgePointId: '6320775'},
-                {id: 116, type: 'single', content: '数据抽象中，（ ）层描述数据实际上是怎样在辅助存储设备上组织的。', options: '[]', answer: '', analysis: '【所属章节：第三节 数据库管理系统】', knowledgePointId: '6320775'},
                 {id: 117, type: 'judge', content: '投影是指选取表中的某些列的列值；广义投影是指在选取属性列时，允许进行适当运算。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第三节 简单查询】', knowledgePointId: '6320775'},
                 {id: 118, type: 'judge', content: '如果SELECT后面是最简单的形式即单独一个×，这种情况输出FROM子句给出表中的所有列值。', options: '["A. 正确", "B. 错误"]', answer: 'B', analysis: '【所属章节：第三节 简单查询】', knowledgePointId: '6320775'},
                 {id: 119, type: 'judge', content: 'ORDER BY子句让查询结果中的行按一个或多个列或列表达式的值进行排序，升序时用ASC，降序时用DESC，默认为升序。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第三节 简单查询】', knowledgePointId: '6320775'},
@@ -146,7 +140,6 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
                 {id: 136, type: 'judge', content: '关系模式S<A，D> ，它的任何一个主属性都既不部分也不传递依赖于任何候选键，则称S∈BCNF。', options: '["A. 正确", "B. 错误"]', answer: 'B', analysis: '【所属章节：第三节 范式】', knowledgePointId: '6320775'},
                 {id: 138, type: 'judge', content: 'PG使用角色来统一管理用户。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第三节 访问控制】', knowledgePointId: '6320775'},
                 {id: 139, type: 'judge', content: 'PG提供GRANT 语句来给角色撤销数据库操作权限。', options: '["A. 正确", "B. 错误"]', answer: 'B', analysis: '【所属章节：第三节 访问控制】', knowledgePointId: '6320775'},
-                {id: 140, type: 'single', content: 'CREATE ROLE nini SUPERUSER;该语句的功能是（）。', options: '[]', answer: '', analysis: '【所属章节：第三节 访问控制】', knowledgePointId: '6320775'},
                 {id: 142, type: 'judge', content: '集合交运算必须在相容的关系间进行。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第三节 附加关系代数运算】', knowledgePointId: '6320775'},
                 {id: 143, type: 'judge', content: '自然联接运算的计算过程是：首先计算笛卡尔积；然后在笛卡尔积的结果上，基于两个参数的关系模式中都出现的属性，即两个关系模式的所有同名属性进行属性值相等的选择运算；最后去除重复列。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第三节 附加关系代数运算】', knowledgePointId: '6320775'},
                 {id: 148, type: 'judge', content: '投影运算用来从给定关系产生一个只有其部分列的新关系。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第二节 基本关系代数运算】', knowledgePointId: '6320775'},
@@ -200,7 +193,7 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
                 {id: 244, type: 'judge', content: '用表表示父子实体集时，只需为每个低层实体集创建表。', options: '["A. 正确", "B. 错误"]', answer: 'B', analysis: '【所属章节：第四节 扩展E-R图及其转换】', knowledgePointId: '6320775'},
                 {id: 245, type: 'judge', content: '一般化是一种自底向上的方法。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第四节 扩展E-R图及其转换】', knowledgePointId: '6320775'},
                 {id: 248, type: 'single', content: '下列__________是数据库中数据的特征。', options: '["A. 独立性", "B. 安全性", "C. 共享性", "D. 以上所有"]', answer: 'D', analysis: '【所属章节：第四节 数据管理技术发展趋势】', knowledgePointId: '6320775'},
-                {id: 249, type: 'judge', content: '下列__________是使用数据库系统的优点。', options: '["A. 增强安全性", "B. 效率的提高", "C. 因复杂而难度加大", "D. 无法持久保存数据"]', answer: 'B', analysis: '【所属章节：第四节 数据管理技术发展趋势】', knowledgePointId: '6320775'},
+                {id: 249, type: 'single', content: '下列__________是使用数据库系统的优点。', options: '["A. 增强安全性", "B. 效率的提高", "C. 因复杂而难度加大", "D. 无法持久保存数据"]', answer: 'B', analysis: '【所属章节：第四节 数据管理技术发展趋势】', knowledgePointId: '6320775'},
                 {id: 250, type: 'judge', content: '关系数据库管理系统使用非常简单的关系模型，使得数据库设计和访问都像面对的是日常生活中广泛使用的最简单形式的表格。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第四节 数据管理技术发展趋势】', knowledgePointId: '6320775'},
                 {id: 252, type: 'judge', content: '采用三层模式两级映射获得了良好数据独立性，使得物理模式的调整和模式的调整都独立于应用程序。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第四节 数据管理技术发展趋势】', knowledgePointId: '6320775'},
                 {id: 261, type: 'judge', content: '尽管出现了大数据技术，关系数据库管理系统在在线事务处理市场的主导地位稳如泰山。', options: '["A. 正确", "B. 错误"]', answer: 'B', analysis: '【所属章节：第四节 数据管理技术发展趋势】', knowledgePointId: '6320775'},
@@ -235,7 +228,7 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
               questions: [
                 {id: 141, type: 'judge', content: '定义附加运算没有增加关系代数的表达能力。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第三节 附加关系代数运算】', knowledgePointId: '6320781'},
                 {id: 145, type: 'single', content: '关系代数运算有（ )。', options: '["A. 附加关系代数运算", "B. 扩展关系代数运算", "C. 基本关系代数运算", "D. 以上都对"]', answer: 'D', analysis: '【所属章节：第二节 基本关系代数运算】', knowledgePointId: '6320781'},
-                {id: 146, type: 'judge', content: '下列哪个运算不属于基本关系代数运算？', options: '["A. 投影", "B. 平方", "C. 交", "D. 选择"]', answer: 'C', analysis: '【所属章节：第二节 基本关系代数运算】', knowledgePointId: '6320781'},
+                {id: 146, type: 'single', content: '下列哪个运算不属于基本关系代数运算？', options: '["A. 投影", "B. 平方", "C. 交", "D. 选择"]', answer: 'C', analysis: '【所属章节：第二节 基本关系代数运算】', knowledgePointId: '6320781'},
                 {id: 149, type: 'judge', content: '关系代数每个运算都是去重的。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第二节 基本关系代数运算】', knowledgePointId: '6320781'},
                 {id: 246, type: 'judge', content: '聚集运算使得关系代数表达式可以在结果中保留悬浮元组。', options: '["A. 正确", "B. 错误"]', answer: 'B', analysis: '【所属章节：第四节 扩展关系代数运算】', knowledgePointId: '6320781'}
               ]
@@ -404,7 +397,6 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
               coursewares: [
                 {id: 1, courseId: 4, knowledgePointId: '6320770', title: '10、数据库结构调整_数据库结构调整', filePath: '课件\\10、数据库结构调整_数据库结构调整.pdf', fileType: 'pdf'},
                 {id: 6, courseId: 4, knowledgePointId: '6320770', title: '3、表的创建与删除_表的创建于删除', filePath: '课件\\3、表的创建与删除_表的创建于删除.pdf', fileType: 'pdf'},
-                {id: 8, courseId: 4, knowledgePointId: '6320770', title: '5、数据查询_数据查询', filePath: '课件\\5、数据查询_数据查询.pdf', fileType: 'pdf'},
                 {id: 132, courseId: 4, knowledgePointId: '6320770', title: '第三章ppt_第三章ppt上详细版', filePath: '课件\\第三章ppt_第三章ppt上详细版.pdf', fileType: 'pdf'},
                 {id: 133, courseId: 4, knowledgePointId: '6320770', title: '第三章ppt_第三章ppt下详细版', filePath: '课件\\第三章ppt_第三章ppt下详细版.pdf', fileType: 'pdf'},
                 {id: 134, courseId: 4, knowledgePointId: '6320770', title: '第三章ppt_第三章ppt精炼版', filePath: '课件\\第三章ppt_第三章ppt精炼版.pdf', fileType: 'pdf'}
@@ -482,7 +474,6 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
                     {id: 50, courseId: 4, knowledgePointId: '6320757', title: '第五节 触发器', filePath: '视频\\第五章 PG数据保护（下）\\第五节 触发器_触发器_blurred.mp4', duration: null},
                   ],
                   coursewares: [
-                    {id: 9, courseId: 4, knowledgePointId: '6320757', title: '6、触发器_触发器', filePath: '课件\\6、触发器_触发器.pdf', fileType: 'pdf'},
                   ],
                   questions: [
                     {id: 209, type: 'judge', content: '触发器比CHECK约束更灵活，可以实施各种复杂的检查和操作，具有更精细和更强大的数据保护能力。', options: '["A. 正确", "B. 错误"]', answer: 'A', analysis: '【所属章节：第五节 触发器】', knowledgePointId: '6320757'},
@@ -520,7 +511,6 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
                     {id: 47, courseId: 4, knowledgePointId: '6320767', title: '第三节 访问控制', filePath: '视频\\第五章 PG数据保护（上）\\第三节 访问控制_访问控制_blurred.mp4', duration: null},
                   ],
                   coursewares: [
-                    {id: 7, courseId: 4, knowledgePointId: '6320767', title: '4、权限和对象管理_权限和对象管理', filePath: '课件\\4、权限和对象管理_权限和对象管理.pdf', fileType: 'pdf'},
                   ],
                   questions: []
                 }
@@ -566,7 +556,6 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
                 {id: 62, courseId: 4, knowledgePointId: '6320844', title: '第四节 扩展E-R图及其转换', filePath: '视频\\第六章 数据库设计：实体-联系方法（中）\\第四节 扩展E-R图及其转换_扩展E-R图及其转换_blurred.mp4', duration: null}
               ],
               coursewares: [
-                {id: 140, courseId: 4, knowledgePointId: '6320844', title: '第六章ppt_第六章ppt精炼版', filePath: '课件\\第六章ppt_第六章ppt精炼版.pdf', fileType: 'pdf'},
                 {id: 141, courseId: 4, knowledgePointId: '6320844', title: '第六章ppt_第六章ppt（上）详细版', filePath: '课件\\第六章ppt_第六章ppt（上）详细版.pdf', fileType: 'pdf'},
                 {id: 142, courseId: 4, knowledgePointId: '6320844', title: '第六章ppt_第六章ppt（下）详细版', filePath: '课件\\第六章ppt_第六章ppt（下）详细版.pdf', fileType: 'pdf'}
               ],
@@ -865,7 +854,6 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
                   level: 3,
                   children: [],
                   videos: [
-                    {id: 9, courseId: 4, knowledgePointId: '6320916', title: '安装配置及实验操作指导视频（带解说） 实验指导视频', filePath: '视频\\实验（二 MySQL）：MySQL实验辅导材料\\安装配置及实验操作指导视频（带解说）_实验指导视频_blurred.mp4', duration: null},
                     {id: 10, courseId: 4, knowledgePointId: '6320916', title: '视频 11', filePath: '视频\\实验（二 MySQL）：MySQL源码安装\\视频_11_blurred.mp4', duration: null},
                     {id: 11, courseId: 4, knowledgePointId: '6320916', title: '视频 22', filePath: '视频\\实验（二 MySQL）：MySQL源码安装\\视频_22_blurred.mp4', duration: null},
                     {id: 12, courseId: 4, knowledgePointId: '6320916', title: '视频：PostgreSQL 安装辅导视频（适用于PG10 11 12 9） PostgreSQL 安装直播精剪', filePath: '视频\\实验（二 PostgreSQL）： PostgreSQL  安装\\视频：PostgreSQL 安装辅导视频（适用于PG10_11_12_9）_PostgreSQL 安装直播精剪_blurred.mp4', duration: null},
@@ -942,7 +930,6 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
               level: 3,
               children: [],
               videos: [
-                {id: 8, courseId: 4, knowledgePointId: '6320899', title: '视频：实验辅导 数据库 表的基本操作录放', filePath: '视频\\实验（三 PostgreSQL）：数据库_表的基本操作_基于教材数据库-帮助学生扣好第一粒扣子\\视频：实验辅导_数据库_表的基本操作录放_blurred.mp4', duration: null},
                 {id: 23, courseId: 4, knowledgePointId: '6320899', title: '视频：实验辅导 直播录制2', filePath: '视频\\实验（四 PostgreSQL）：SQL数据定义与修改_基于抗疫英雄数据库-致敬英雄楷模 立志报效祖国\\视频：实验辅导_直播录制2_blurred.mp4', duration: null}
               ],
               coursewares: [
@@ -1013,7 +1000,6 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
               level: 3,
               children: [],
               videos: [
-                {id: 7, courseId: 4, knowledgePointId: '6320905', title: '视频：嵌入式pgSQL实验辅导视频 频：实验辅导视频', filePath: '视频\\实验（七 PostgreSQL）：嵌入式pgSQL_基于诺贝尔奖得主数据库-弘扬科学精神，建设创新型国家，促进人类进步。\\视频：嵌入式pgSQL实验辅导视频_频：实验辅导视频_blurred.mp4', duration: null},
                 {id: 68, courseId: 4, knowledgePointId: '6320905', title: '第二节 嵌入式pgSQL', filePath: '视频\\第四章 PG应用（上）\\第二节 嵌入式pgSQL_嵌入式pgSQL_blurred.mp4', duration: null}
               ],
               coursewares: [
@@ -1229,7 +1215,6 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
                 {id: 41, courseId: 4, knowledgePointId: '6320914', title: '第二节 关系操作的实现（续）', filePath: '视频\\第九章 查询优化\\第二节 关系操作的实现（续）_关系操作的实现（续）_blurred.mp4', duration: null}
               ],
               coursewares: [
-                {id: 2, courseId: 4, knowledgePointId: '6320914', title: '11、SQL调优_SQL调优', filePath: '课件\\11、SQL调优_SQL调优.pdf', fileType: 'pdf'},
                 {id: 3, courseId: 4, knowledgePointId: '6320914', title: '12、性能调优_性能调优', filePath: '课件\\12、性能调优_性能调优.pdf', fileType: 'pdf'},
                 {id: 29, courseId: 4, knowledgePointId: '6320914', title: 'GaussDB索引与查询优化_GaussDB索引与查询优化ppt', filePath: '课件\\GaussDB索引与查询优化_GaussDB索引与查询优化ppt.pdf', fileType: 'pdf'},
                 {id: 30, courseId: 4, knowledgePointId: '6320914', title: 'GaussDB索引与查询优化_GaussDB索引与查询优化报告模板', filePath: '课件\\GaussDB索引与查询优化_GaussDB索引与查询优化报告模板.pdf', fileType: 'pdf'},
@@ -1244,7 +1229,6 @@ export const MOCK_CHAPTERS: SubTopicVO[] = [
               level: 3,
               children: [],
               videos: [
-                {id: 2, courseId: 4, knowledgePointId: '6320915', title: '实验指导视频 实验指导视频ha', filePath: '视频\\实验（H）：大数据Hadoop\\实验指导视频_实验指导视频ha_blurred.mp4', duration: null}
               ],
               coursewares: [],
               questions: []

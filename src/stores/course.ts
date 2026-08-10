@@ -6,6 +6,7 @@ import {
   getCourses,
   getMyCourses,
   switchCurrentCourse,
+  unenrollCourse as unenrollCourseApi,
 } from '@/api/course'
 import { useUserStore } from './user'
 
@@ -34,6 +35,11 @@ export const useCourseStore = defineStore('course', () => {
     userStore.setCurrentCourseId(courseId)
   }
 
+  const unenrollCourse = async (courseId: number) => {
+    await unenrollCourseApi(courseId)
+    await fetchMyCourses()
+  }
+
   const getCurrentCourse = () => {
     const userStore = useUserStore()
     const courseId = userStore.currentCourseId
@@ -48,6 +54,7 @@ export const useCourseStore = defineStore('course', () => {
     fetchMyCourses,
     enrollCourse,
     switchCourse,
+    unenrollCourse,
     getCurrentCourse,
   }
 })

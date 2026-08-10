@@ -155,10 +155,21 @@ const groupColors: Record<number, string> = {
 const DEFAULT_COLOR = '#a0d911'
 const getColor = (group: number): string => groupColors[group] ?? DEFAULT_COLOR
 
-const ROOT_RING_RADIUS = 200
-const CHILD_RING_RADIUS = 160
-const ROOT_EXPAND_OFFSET = CHILD_RING_RADIUS * 4 // 640
-const CHILD_EXPAND_OFFSET = 120
+// ── Per-level layout config (group 0-3) ──
+const LEVEL_CONFIG: Record<number, { ringRadius: number; expandOffset: number }> = {
+  0: { ringRadius: 200, expandOffset: 840 },  // 一级：根节点
+  1: { ringRadius: 140, expandOffset: 160 },  // 二级：子节点
+  2: { ringRadius: 100, expandOffset: 160 },  // 三级：孙节点
+  3: { ringRadius: 90, expandOffset: 140 },  // 四级：曾孙节点
+}
+const FALLBACK_CONFIG = { ringRadius: 80, expandOffset: 120 }
+
+function getLevelRingRadius(group: number): number {
+  return LEVEL_CONFIG[group]?.ringRadius ?? FALLBACK_CONFIG.ringRadius
+}
+function getLevelExpandOffset(group: number): number {
+  return LEVEL_CONFIG[group]?.expandOffset ?? FALLBACK_CONFIG.expandOffset
+}
 const MIN_ZOOM = 0.2
 const MAX_ZOOM = 3
 
@@ -404,7 +415,9 @@ function computeLayout() {
 
   rootIds.forEach((node, i) => {
     const angle = (i / rootIds.length) * 2 * Math.PI - Math.PI / 2
-    const radius = expanded.has(node.id) ? ROOT_RING_RADIUS + ROOT_EXPAND_OFFSET : ROOT_RING_RADIUS
+    const ringR = getLevelRingRadius(node.group)
+    const offsetR = getLevelExpandOffset(node.group)
+    const radius = expanded.has(node.id) ? ringR + offsetR : ringR
     positions[node.id] = {
       x: centerX + Math.cos(angle) * radius,
       y: centerY + Math.sin(angle) * radius,
@@ -425,8 +438,11 @@ function computeLayout() {
 
     const children = (cm.get(nodeId) || []).filter(id => visible.has(id))
     children.forEach((childId, i) => {
+      const childNode = nodeMap.value.get(childId)
       const angle = (i / children.length) * 2 * Math.PI - Math.PI / 2
-      const radius = expanded.has(childId) ? CHILD_RING_RADIUS + CHILD_EXPAND_OFFSET : CHILD_RING_RADIUS
+      const ringR = childNode ? getLevelRingRadius(childNode.group) : FALLBACK_CONFIG.ringRadius
+      const offsetR = childNode ? getLevelExpandOffset(childNode.group) : FALLBACK_CONFIG.expandOffset
+      const radius = expanded.has(childId) ? ringR + offsetR : ringR
       positions[childId] = {
         x: parentPos.x + Math.cos(angle) * radius,
         y: parentPos.y + Math.sin(angle) * radius,

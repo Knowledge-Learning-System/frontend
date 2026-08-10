@@ -4,6 +4,13 @@ export interface UserInfo {
   role: string
   avatar?: string
   currentCourseId?: number
+  studentId?: string
+  email?: string
+  name?: string
+  nickname?: string
+  grade?: string
+  age?: number
+  major?: string
 }
 
 export interface LoginParams {
@@ -14,6 +21,13 @@ export interface LoginParams {
 export interface RegisterParams {
   username: string
   password: string
+  studentId: string
+  email: string
+  name?: string
+  nickname?: string
+  grade?: string
+  age?: number
+  major?: string
 }
 
 export interface LoginResult {

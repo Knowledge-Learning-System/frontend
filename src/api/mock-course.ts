@@ -117,3 +117,13 @@ export const mockSwitchCourse = async (courseId: number): Promise<void> => {
     throw new Error('未选择该课程')
   }
 }
+
+// Mock 退课
+export const mockUnenrollCourse = async (courseId: number): Promise<void> => {
+  await delay(300)
+  const idx = mockMyCourses.findIndex(c => c.id === courseId)
+  if (idx === -1) {
+    throw new Error('未加入该课程')
+  }
+  mockMyCourses.splice(idx, 1)
+}

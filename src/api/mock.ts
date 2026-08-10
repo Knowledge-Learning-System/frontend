@@ -6,18 +6,28 @@ const mockUsers = [
   {
     id: 1,
     studentId: '2024001',
-    username: '张三',
+    username: 'zhangsan',
     password: '123456',
     email: 'zhangsan@example.com',
     currentCourseId: 1,
+    name: '张三',
+    nickname: '小张',
+    grade: '大二',
+    age: 20,
+    major: '计算机科学与技术',
   },
   {
     id: 2,
     studentId: '2024002',
-    username: '李四',
+    username: 'lisi',
     password: '123456',
     email: 'lisi@example.com',
     currentCourseId: 1,
+    name: '李四',
+    nickname: '小李',
+    grade: '大三',
+    age: 21,
+    major: '软件工程',
   },
 ]
 
@@ -40,10 +50,16 @@ export const mockLogin = async (params: LoginParams): Promise<LoginResult> => {
     token: `mock-token-${user.id}-${Date.now()}`,
     user: {
       id: user.id,
-      studentId: user.studentId,
       username: user.username,
       email: user.email,
       currentCourseId: user.currentCourseId,
+      studentId: user.studentId,
+      name: user.name,
+      nickname: user.nickname,
+      grade: user.grade,
+      age: user.age,
+      major: user.major,
+      role: 'student',
     },
   }
 }
@@ -72,6 +88,11 @@ export const mockRegister = async (params: RegisterParams): Promise<void> => {
     password: params.password,
     email: params.email,
     currentCourseId: 1,
+    name: params.name || '',
+    nickname: params.nickname || '',
+    grade: params.grade || '',
+    age: params.age || 0,
+    major: params.major || '',
   }
   
   mockUsers.push(newUser)
@@ -80,13 +101,18 @@ export const mockRegister = async (params: RegisterParams): Promise<void> => {
 // Mock 获取当前用户信息
 export const mockGetCurrentUser = async (): Promise<UserInfo> => {
   await delay(300)
-  
-  // 返回模拟用户信息
+
   return {
     id: 1,
-    studentId: '2024001',
-    username: '张三',
+    username: 'zhangsan',
     email: 'zhangsan@example.com',
     currentCourseId: 1,
+    studentId: '2024001',
+    role: 'student',
+    name: '张三',
+    nickname: '小张',
+    grade: '大二',
+    age: 20,
+    major: '计算机科学与技术',
   }
 }

@@ -14,7 +14,7 @@
             <path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" fill="none"/>
           </svg>
         </div>
-        <h1 class="register-system-name">智能在线学习系统</h1>
+        <h1 class="register-system-name">高校个性化在线学习系统</h1>
       </div>
 
       <el-card class="register-card" shadow="never">
@@ -22,7 +22,7 @@
 
         <el-form ref="formRef" :model="form" :rules="rules" @submit.prevent="handleRegister">
           <el-form-item prop="username">
-            <el-input v-model="form.username" placeholder="用户名" size="large" />
+            <el-input v-model="form.username" placeholder="学号" size="large" />
           </el-form-item>
           <el-form-item prop="password">
             <el-input
@@ -81,7 +81,7 @@ const validateConfirm = (_rule: unknown, value: string, callback: (error?: Error
 }
 
 const rules: FormRules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  username: [{ required: true, message: '请输入学号', trigger: 'blur' }],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 6, message: '密码至少6位', trigger: 'blur' },
