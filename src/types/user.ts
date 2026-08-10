@@ -21,6 +21,7 @@ export interface LoginParams {
 export interface RegisterParams {
   username: string
   password: string
+  role?: string
   studentId: string
   email: string
   name?: string

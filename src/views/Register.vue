@@ -42,6 +42,12 @@
               show-password
             />
           </el-form-item>
+          <el-form-item label="角色">
+            <el-radio-group v-model="form.role">
+              <el-radio value="student">学生</el-radio>
+              <el-radio value="teacher">教师</el-radio>
+            </el-radio-group>
+          </el-form-item>
           <el-button type="primary" native-type="submit" :loading="loading" size="large" class="submit-btn">
             注册
           </el-button>
@@ -70,6 +76,7 @@ const form = reactive({
   username: '',
   password: '',
   confirmPassword: '',
+  role: 'student',
 })
 
 const validateConfirm = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
@@ -98,7 +105,7 @@ const handleRegister = async () => {
 
   loading.value = true
   try {
-    await registerApi({ username: form.username, password: form.password })
+    await registerApi({ username: form.username, password: form.password, role: form.role })
     ElMessage.success('注册成功，请登录')
     router.push('/login')
   } catch {
