@@ -25,11 +25,14 @@ request.interceptors.request.use(
 request.interceptors.response.use(
   (response: AxiosResponse) => {
     const res = response.data
-    if (res.code === 0) {
-      return res.data
-    } else {
+    // 兼容非 Result 包装的裸返回（部分后端接口直接返回 List/VO 或空 body）
+    if (res && typeof res === 'object' && 'code' in res) {
+      if (res.code === 0) {
+        return res.data
+      }
       return Promise.reject(new Error(res.msg || '请求失败'))
     }
+    return res
   },
   (error) => {
     if (error.response?.status === 401) {

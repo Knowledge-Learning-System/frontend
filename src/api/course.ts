@@ -41,3 +41,27 @@ export const unenrollCourse = (courseId: number) => {
   }
   return request.delete<void, void>(`/courses/enroll/${courseId}`)
 }
+
+// ---- 教师端课程管理 ----
+
+export interface CoursePayload {
+  name: string
+  description?: string
+  cover?: string
+  source?: string
+}
+
+/** 添加课程 — POST /courses/add */
+export const addCourse = (data: CoursePayload) => {
+  return request.post<Course, Course>('/courses/add', data)
+}
+
+/** 编辑课程 — PUT /courses/{id} */
+export const updateCourse = (id: number, data: CoursePayload) => {
+  return request.put<Course, Course>(`/courses/${id}`, data)
+}
+
+/** 删除课程（软删除）— DELETE /courses/{id} */
+export const deleteCourse = (id: number) => {
+  return request.delete<void, void>(`/courses/${id}`)
+}

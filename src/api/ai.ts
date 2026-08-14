@@ -8,9 +8,16 @@ export interface AiChatRequest {
   message: string
 }
 
+export interface FunctionEntry {
+  name: string
+  path: string
+  description?: string
+}
+
 export interface AiChatResponse {
   reply: string
   sources: string[]
+  functions?: FunctionEntry[]
 }
 
 // ---- API ----

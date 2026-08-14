@@ -22,7 +22,7 @@
 
         <el-form ref="formRef" :model="form" :rules="rules" @submit.prevent="handleRegister">
           <el-form-item prop="username">
-            <el-input v-model="form.username" placeholder="学号" size="large" />
+            <el-input v-model="form.username" :placeholder="accountPlaceholder" size="large" />
           </el-form-item>
           <el-form-item prop="password">
             <el-input
@@ -62,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
@@ -79,6 +79,9 @@ const form = reactive({
   role: 'student',
 })
 
+const isTeacher = computed(() => form.role === 'teacher')
+const accountPlaceholder = computed(() => (isTeacher.value ? '用户名/工号' : '学号'))
+
 const validateConfirm = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
   if (value !== form.password) {
     callback(new Error('两次输入的密码不一致'))
@@ -87,8 +90,8 @@ const validateConfirm = (_rule: unknown, value: string, callback: (error?: Error
   }
 }
 
-const rules: FormRules = {
-  username: [{ required: true, message: '请输入学号', trigger: 'blur' }],
+const rules = computed<FormRules>(() => ({
+  username: [{ required: true, message: isTeacher.value ? '请输入用户名或工号' : '请输入学号', trigger: 'blur' }],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 6, message: '密码至少6位', trigger: 'blur' },
@@ -97,7 +100,7 @@ const rules: FormRules = {
     { required: true, message: '请确认密码', trigger: 'blur' },
     { validator: validateConfirm, trigger: 'blur' },
   ],
-}
+}))
 
 const handleRegister = async () => {
   const valid = await formRef.value?.validate().catch(() => false)

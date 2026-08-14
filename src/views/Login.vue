@@ -34,7 +34,7 @@
           <el-form-item prop="studentId">
             <el-input
               v-model="loginForm.studentId"
-              placeholder="请输入学号"
+              placeholder="请输入学号 / 用户名"
               :prefix-icon="User"
               size="large"
               class="login-input"
@@ -102,8 +102,8 @@ const loginForm = reactive({
 
 const rules: FormRules = {
   studentId: [
-    { required: true, message: '请输入学号', trigger: 'blur' },
-    { min: 4, max: 20, message: '学号长度为4-20位', trigger: 'blur' },
+    { required: true, message: '请输入账号', trigger: 'blur' },
+    { min: 4, max: 20, message: '账号长度为4-20位', trigger: 'blur' },
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
@@ -127,9 +127,10 @@ const handleLogin = async () => {
       password: loginForm.password,
     })
     ElMessage.success('登录成功')
-    router.push('/dashboard')
+    const role = userStore.userInfo?.role
+    router.push(role === 'teacher' ? '/teacher/courses' : '/dashboard')
   } catch {
-    ElMessage.error('学号或密码错误')
+    ElMessage.error('账号或密码错误')
   } finally {
     loading.value = false
   }

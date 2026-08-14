@@ -302,14 +302,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, provide } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ArrowLeft, ArrowRight, Calendar, CircleCheck, CircleCheckFilled, Clock, Document, Plus, Reading, Refresh, StarFilled, TrendCharts, User, VideoPlay, WarningFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useCourseStore } from '@/stores/course'
 import { useUserStore } from '@/stores/user'
 import { getStudyPlan } from '@/api/study'
-
 const router = useRouter()
 const route = useRoute()
 const courseStore = useCourseStore()
@@ -350,6 +349,7 @@ interface PlanDay {
 }
 
 const userStore = useUserStore()
+provide('currentCourseId', userStore.currentCourseId)
 const showPlanDialog = ref(false)
 const planLoading = ref(false)
 const planTasks = ref<PlanTask[]>([])

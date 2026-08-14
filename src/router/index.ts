@@ -88,6 +88,33 @@ const router = createRouter({
         },
       ],
     },
+    {
+      path: '/teacher',
+      component: () => import('@/layouts/TeacherLayout.vue'),
+      redirect: '/teacher/courses',
+      children: [
+        {
+          path: 'courses',
+          name: 'TeacherCourses',
+          component: () => import('@/views/teacher/TeacherCourses.vue'),
+        },
+        {
+          path: 'students',
+          name: 'TeacherStudents',
+          component: () => import('@/views/teacher/TeacherStudents.vue'),
+        },
+        {
+          path: 'homework',
+          name: 'TeacherHomework',
+          component: () => import('@/views/teacher/TeacherHomework.vue'),
+        },
+        {
+          path: 'questions',
+          name: 'TeacherQuestions',
+          component: () => import('@/views/teacher/TeacherQuestions.vue'),
+        },
+      ],
+    },
   ],
 })
 
@@ -96,7 +123,8 @@ router.beforeEach(async (to) => {
 
   if (to.meta.public) {
     if (userStore.isLoggedIn && (to.path === '/login' || to.path === '/register')) {
-      return '/dashboard'
+      const role = userStore.userInfo?.role
+      return role === 'teacher' ? '/teacher/courses' : '/dashboard'
     }
     return true
   }
@@ -112,6 +140,18 @@ router.beforeEach(async (to) => {
       userStore.clearAuth()
       return '/login'
     }
+  }
+
+  const role = userStore.userInfo?.role
+
+  // 学生访问教师端 → 重定向回学生端首页
+  if (to.path.startsWith('/teacher') && role !== 'teacher') {
+    return '/dashboard'
+  }
+
+  // 教师访问任何非教师端页面 → 锁死在教师端
+  if (role === 'teacher' && !to.path.startsWith('/teacher')) {
+    return '/teacher/courses'
   }
 
   return true

@@ -48,12 +48,12 @@ export function publishHomework(id: number) {
 
 /** 作业列表 — GET /homework?courseId= */
 export function getHomeworkList(courseId: number) {
-  return request.get<HomeworkVO[]>('/homework', { params: { courseId } })
+  return request.get<HomeworkVO[], HomeworkVO[]>('/homework', { params: { courseId } })
 }
 
 /** 作业详情 — GET /homework/{id} */
 export function getHomeworkDetail(id: number) {
-  return request.get<HomeworkVO>(`/homework/${id}`)
+  return request.get<HomeworkVO, HomeworkVO>(`/homework/${id}`)
 }
 
 /** 提交作业 — POST /homework/{id}/submit */
@@ -63,7 +63,7 @@ export function submitHomework(id: number, data: { content: string; attachments?
 
 /** 查看提交列表 — GET /homework/{id}/submissions */
 export function getSubmissions(homeworkId: number) {
-  return request.get<HomeworkSubmissionVO[]>(`/homework/${homeworkId}/submissions`)
+  return request.get<HomeworkSubmissionVO[], HomeworkSubmissionVO[]>(`/homework/${homeworkId}/submissions`)
 }
 
 /** 评分+反馈 — PUT /homework/submission/{id}/grade */
