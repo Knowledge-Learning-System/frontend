@@ -86,6 +86,11 @@ const router = createRouter({
           name: 'QA',
           component: () => import('@/views/QAPage.vue'),
         },
+        {
+          path: 'discussions',
+          name: 'Discussions',
+          component: () => import('@/views/Discussion.vue'),
+        },
       ],
     },
     {
@@ -112,6 +117,11 @@ const router = createRouter({
           path: 'questions',
           name: 'TeacherQuestions',
           component: () => import('@/views/teacher/TeacherQuestions.vue'),
+        },
+        {
+          path: 'discussions',
+          name: 'TeacherDiscussions',
+          component: () => import('@/views/Discussion.vue'),
         },
       ],
     },
