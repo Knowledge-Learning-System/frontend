@@ -415,14 +415,24 @@
             <template #header>
               <div class="video-dialog-header">
                 <span>{{ currentVideo?.title || '视频播放' }}</span>
-                <el-button
-                  :type="showNotePanel ? 'primary' : 'default'"
-                  size="small"
-                  @click="toggleNotePanel"
-                >
-                  <el-icon><Notebook /></el-icon>
-                  <span>笔记</span>
-                </el-button>
+                <div class="video-dialog-header-actions">
+                  <el-button
+                    :type="showNotePanel && activePanel === 'note' ? 'primary' : 'default'"
+                    size="small"
+                    @click="openVideoPanel('note')"
+                  >
+                    <el-icon><Notebook /></el-icon>
+                    <span>笔记</span>
+                  </el-button>
+                  <el-button
+                    :type="showNotePanel && activePanel === 'discussion' ? 'primary' : 'default'"
+                    size="small"
+                    @click="openVideoPanel('discussion')"
+                  >
+                    <el-icon><ChatDotRound /></el-icon>
+                    <span>讨论</span>
+                  </el-button>
+                </div>
               </div>
             </template>
             <div class="video-dialog-content">
@@ -434,7 +444,9 @@
                 :knowledge-point-id="selectedKpId"
                 :course-id="courseId"
                 :show-note-panel="showNotePanel"
+                :active-panel="activePanel"
                 @toggle-note-panel="toggleNotePanel"
+                @update:active-panel="activePanel = $event"
               />
             </div>
           </el-dialog>
@@ -459,7 +471,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { VideoPlay, Document, Reading, CircleCheckFilled, CircleCloseFilled, SuccessFilled, Edit, Delete, Notebook, ArrowLeft } from '@element-plus/icons-vue'
+import { VideoPlay, Document, Reading, CircleCheckFilled, CircleCloseFilled, SuccessFilled, Edit, Delete, Notebook, ChatDotRound, ArrowLeft } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getKnowledgeGraph, getChapterStructure } from '@/api/knowledgeGraph'
 import { getQuestions, submitAnswers, type QuestionItem, type SubmitAnswerResult } from '@/api/question'
@@ -587,6 +599,7 @@ const currentVideo = ref<VideoResource | null>(null)
 const pendingSeekTime = ref<number | null>(null)
 const videoPlayerRef = ref<InstanceType<typeof VideoPlayer> | null>(null)
 const showNotePanel = ref(false)
+const activePanel = ref<'note' | 'discussion'>('note')
 
 const courseName = computed(() => {
   const c = courseStore.getCurrentCourse()
@@ -827,6 +840,7 @@ function playVideo(v: VideoResource, seekSeconds?: number) {
   pendingSeekTime.value = seekSeconds ?? null
   videoDialogVisible.value = true
   showNotePanel.value = false
+  activePanel.value = 'note'
 }
 
 // 从笔记时间戳跳转到对应视频时间
@@ -856,11 +870,21 @@ function handleVideoDialogClose() {
   currentVideo.value = null
   pendingSeekTime.value = null
   showNotePanel.value = false
+  activePanel.value = 'note'
   fetchNotesForKp()
 }
 
 function toggleNotePanel() {
   showNotePanel.value = !showNotePanel.value
+}
+
+function openVideoPanel(panel: 'note' | 'discussion') {
+  if (showNotePanel.value && activePanel.value === panel) {
+    showNotePanel.value = false
+  } else {
+    showNotePanel.value = true
+    activePanel.value = panel
+  }
 }
 
 function openCourseware(c: CoursewareResource) {
@@ -1924,6 +1948,12 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   width: 100%;
+}
+
+.video-dialog-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* 笔记相关 */
