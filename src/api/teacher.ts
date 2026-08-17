@@ -85,6 +85,7 @@ export const uploadResource = (
   courseId?: number,
   knowledgePointId?: string,
   title?: string,
+  type: 'video' | 'courseware' = 'courseware',
 ) => {
   const formData = new FormData()
   formData.append('file', file)
@@ -97,5 +98,6 @@ export const uploadResource = (
   if (title) {
     formData.append('title', title)
   }
+  formData.append('type', type)
   return request.post<CoursewareResource, CoursewareResource>('/resources/upload', formData)
 }

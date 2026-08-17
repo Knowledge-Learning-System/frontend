@@ -45,30 +45,76 @@
     </el-dialog>
 
     <!-- 上传学习资料 -->
-    <el-dialog v-model="uploadDialogVisible" title="上传学习资料" width="520px">
+    <el-dialog v-model="uploadDialogVisible" title="上传教学资源" width="640px">
       <el-form label-width="90px">
         <el-form-item label="所属课程">
-          <el-select v-model="uploadForm.courseId" placeholder="请选择课程" style="width: 100%">
+          <el-select v-model="uploadForm.courseId" placeholder="请选择课程" style="width: 100%" @change="handleCourseChange">
             <el-option v-for="c in courses" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="资料标题">
-          <el-input v-model="uploadForm.title" placeholder="可选，默认使用文件名" />
+        <el-form-item label="选择章节">
+          <el-tree
+            v-if="uploadForm.courseId"
+            ref="chapterTreeRef"
+            :data="chapterTreeData"
+            :props="{ label: 'label', children: 'children' }"
+            node-key="id"
+            highlight-current
+            default-expand-all
+            :expand-on-click-node="false"
+            @node-click="handleNodeClick"
+            style="max-height: 240px; overflow: auto; border: 1px solid #e4e7ed; border-radius: 4px; padding: 8px;"
+          />
+          <el-empty v-else description="请先选择课程" :image-size="60" />
         </el-form-item>
-        <el-form-item label="知识点 ID">
-          <el-input v-model="uploadForm.knowledgePointId" placeholder="可选" />
+        <el-form-item label="资源类型">
+          <el-radio-group v-model="uploadForm.resourceType">
+            <el-radio label="video">视频</el-radio>
+            <el-radio label="courseware">PPT</el-radio>
+            <el-radio label="question">试题</el-radio>
+          </el-radio-group>
         </el-form-item>
-        <el-form-item label="文件">
-          <el-upload
-            :auto-upload="false"
-            :limit="1"
-            :file-list="uploadFileList"
-            :on-change="handleFileChange"
-            :on-remove="() => { uploadForm.file = null }"
-          >
-            <el-button>选择文件</el-button>
-          </el-upload>
-        </el-form-item>
+
+        <!-- 视频 / PPT 文件上传 -->
+        <template v-if="uploadForm.resourceType !== 'question'">
+          <el-form-item label="资源标题">
+            <el-input v-model="uploadForm.title" placeholder="可选，默认使用文件名" />
+          </el-form-item>
+          <el-form-item label="文件">
+            <el-upload
+              :auto-upload="false"
+              :limit="1"
+              :file-list="uploadFileList"
+              :on-change="handleFileChange"
+              :on-remove="() => { uploadForm.file = null }"
+              :accept="uploadForm.resourceType === 'video' ? 'video/*' : '.ppt,.pptx,.pdf,.doc,.docx'"
+            >
+              <el-button>选择文件</el-button>
+            </el-upload>
+          </el-form-item>
+        </template>
+
+        <!-- 试题表单 -->
+        <template v-else>
+          <el-form-item label="题型">
+            <el-select v-model="uploadForm.questionType" style="width: 100%">
+              <el-option label="单选题" value="single" />
+              <el-option label="多选题" value="multiple" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="题目内容">
+            <el-input v-model="uploadForm.questionContent" type="textarea" :rows="2" placeholder="请输入题目内容" />
+          </el-form-item>
+          <el-form-item label="选项">
+            <el-input v-model="uploadForm.questionOptions" type="textarea" :rows="2" placeholder='JSON 数组字符串，如 ["A.xxx","B.xxx","C.xxx","D.xxx"]' />
+          </el-form-item>
+          <el-form-item label="正确答案">
+            <el-input v-model="uploadForm.questionAnswer" placeholder="如 A，多选题如 ABC" />
+          </el-form-item>
+          <el-form-item label="答案解析">
+            <el-input v-model="uploadForm.questionAnalysis" type="textarea" :rows="2" placeholder="可选" />
+          </el-form-item>
+        </template>
       </el-form>
       <template #footer>
         <el-button @click="uploadDialogVisible = false">取消</el-button>
@@ -84,7 +130,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, UploadFile } from 'element-plus'
 import { getCourses, addCourse, updateCourse, deleteCourse } from '@/api/course'
 import type { CoursePayload } from '@/api/course'
-import { uploadResource } from '@/api/teacher'
+import { uploadResource, addQuestion } from '@/api/teacher'
+import { getChapterStructure } from '@/api/knowledgeGraph'
+import type { SubTopicVO } from '@/types/knowledgeGraph'
 import type { Course } from '@/types/course'
 
 type CourseRow = Course & { source?: string; courseCode?: string }
@@ -182,17 +230,75 @@ const uploadFileList = ref<UploadFile[]>([])
 const uploadForm = reactive({
   courseId: undefined as number | undefined,
   title: '',
-  knowledgePointId: '',
+  resourceType: 'video' as 'video' | 'courseware' | 'question',
   file: null as File | null,
+  questionType: 'single',
+  questionContent: '',
+  questionOptions: '',
+  questionAnswer: '',
+  questionAnalysis: '',
 })
+
+// 章节树（选课程 → 选章节/知识点节点）
+interface ChapterTreeNode {
+  id: string
+  label: string
+  isChapter: boolean
+  children?: ChapterTreeNode[]
+}
+
+const chapterTreeRef = ref()
+const chapterTreeData = ref<ChapterTreeNode[]>([])
+const selectedNode = ref<ChapterTreeNode | null>(null)
+
+const buildChapterTree = (subTopics: SubTopicVO[]): ChapterTreeNode[] => {
+  const buildKp = (kp: SubTopicVO['knowledgePoints'][number]): ChapterTreeNode => ({
+    id: kp.id,
+    label: kp.name,
+    isChapter: false,
+    children: kp.children?.length ? kp.children.map(buildKp) : undefined,
+  })
+  return subTopics.map((st) => ({
+    id: st.id,
+    label: st.name,
+    isChapter: true,
+    children: st.knowledgePoints?.length ? st.knowledgePoints.map(buildKp) : undefined,
+  }))
+}
+
+const handleCourseChange = async () => {
+  selectedNode.value = null
+  chapterTreeData.value = []
+  if (!uploadForm.courseId) return
+  try {
+    const data = await getChapterStructure(uploadForm.courseId)
+    chapterTreeData.value = buildChapterTree(data)
+  } catch {
+    ElMessage.error('加载章节结构失败')
+  }
+}
+
+const handleNodeClick = (node: ChapterTreeNode) => {
+  selectedNode.value = node
+}
 
 const openUploadDialog = (row?: CourseRow) => {
   uploadForm.courseId = row?.id ?? undefined
   uploadForm.title = ''
-  uploadForm.knowledgePointId = ''
+  uploadForm.resourceType = 'video'
   uploadForm.file = null
+  uploadForm.questionType = 'single'
+  uploadForm.questionContent = ''
+  uploadForm.questionOptions = ''
+  uploadForm.questionAnswer = ''
+  uploadForm.questionAnalysis = ''
   uploadFileList.value = []
+  selectedNode.value = null
+  chapterTreeData.value = []
   uploadDialogVisible.value = true
+  if (uploadForm.courseId) {
+    handleCourseChange()
+  }
 }
 
 const handleFileChange = (file: UploadFile) => {
@@ -200,23 +306,46 @@ const handleFileChange = (file: UploadFile) => {
 }
 
 const handleUpload = async () => {
-  if (!uploadForm.file) {
-    ElMessage.warning('请选择文件')
-    return
-  }
   if (!uploadForm.courseId) {
     ElMessage.warning('请选择所属课程')
     return
   }
+  if (!selectedNode.value) {
+    ElMessage.warning('请选择要添加资源的章节或知识点')
+    return
+  }
+  const nodeId = selectedNode.value.id
   uploading.value = true
   try {
-    await uploadResource(
-      uploadForm.file,
-      uploadForm.courseId,
-      uploadForm.knowledgePointId || undefined,
-      uploadForm.title || undefined,
-    )
-    ElMessage.success('上传成功')
+    if (uploadForm.resourceType === 'question') {
+      if (!uploadForm.questionContent || !uploadForm.questionOptions || !uploadForm.questionAnswer) {
+        ElMessage.warning('请填写完整的试题信息')
+        return
+      }
+      await addQuestion({
+        courseId: uploadForm.courseId,
+        knowledgePointId: nodeId,
+        type: uploadForm.questionType,
+        content: uploadForm.questionContent,
+        options: uploadForm.questionOptions,
+        answer: uploadForm.questionAnswer,
+        analysis: uploadForm.questionAnalysis || undefined,
+      })
+      ElMessage.success('试题添加成功')
+    } else {
+      if (!uploadForm.file) {
+        ElMessage.warning('请选择文件')
+        return
+      }
+      await uploadResource(
+        uploadForm.file,
+        uploadForm.courseId,
+        nodeId,
+        uploadForm.title || undefined,
+        uploadForm.resourceType,
+      )
+      ElMessage.success('上传成功')
+    }
     uploadDialogVisible.value = false
   } catch {
     ElMessage.error('上传失败')
