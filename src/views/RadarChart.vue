@@ -113,7 +113,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft, Refresh, Search } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
@@ -129,8 +129,10 @@ interface KnowledgePoint {
   mastery: number
 }
 
-defineProps<{
+const props = defineProps<{
   embedded?: boolean
+  /** 当前浏览课程 id；传入后优先按此取数，否则回退到全局当前课程 */
+  courseId?: number
 }>()
 
 const router = useRouter()
@@ -141,15 +143,34 @@ const selectedDimension = ref('overall')
 const searchText = ref('')
 const chartInstance = ref<echarts.ECharts | null>(null)
 const chartContainer = ref<HTMLElement | null>(null)
+
+let pendingInit = false
+let resizeObserver: ResizeObserver | null = null
 const loading = ref(false)
 const error = ref('')
 
 const knowledgePoints = ref<KnowledgePoint[]>([])
 
+// 雷达图最多绘制的知识点数量，超出则按掌握度取前 N，避免轴名重叠
+const MAX_RADAR_POINTS = 12
+
+// 雷达图绘制用：仅包含已作答（掌握度>0）的知识点，数量超限时保留掌握度最高的若干并确保最弱点在内
+const radarPoints = computed(() => {
+  const active = knowledgePoints.value.filter(p => p.mastery > 0)
+  if (active.length <= MAX_RADAR_POINTS) return active
+  const sorted = [...active].sort((a, b) => b.mastery - a.mastery)
+  const top = sorted.slice(0, MAX_RADAR_POINTS)
+  const weakest = active.reduce((min, p) => (p.mastery < min.mastery ? p : min))
+  if (!top.some(p => p.id === weakest.id)) {
+    top[top.length - 1] = weakest
+  }
+  return top
+})
+
 const loadData = async () => {
-  const course = courseStore.getCurrentCourse()
+  const courseId = props.courseId ?? courseStore.getCurrentCourse()?.id
   const userId = userStore.userInfo?.id
-  if (!userId || !course) {
+  if (!userId || !courseId) {
     error.value = '无法获取用户或课程信息，请确认已登录并选择了课程'
     return
   }
@@ -157,7 +178,7 @@ const loadData = async () => {
   loading.value = true
   error.value = ''
   try {
-    const data = await getRadar(userId, course.id)
+    const data = await getRadar(userId, courseId)
     knowledgePoints.value = data
     if (data.length > 0) {
       initChart()
@@ -213,10 +234,17 @@ const getMasteryValueClass = (mastery: number) => {
 }
 
 const initChart = () => {
-  if (!chartContainer.value) return
-  
+  const el = chartContainer.value
+  if (!el) return
+
+  // 容器处于未激活 Tab（display:none）时宽高为 0，挂起渲染，待容器可见后重试
+  if (el.offsetWidth === 0 || el.offsetHeight === 0) {
+    pendingInit = true
+    return
+  }
+
   if (!chartInstance.value) {
-    chartInstance.value = echarts.init(chartContainer.value)
+    chartInstance.value = echarts.init(el)
   }
   
   const option: EChartsOption = {
@@ -262,7 +290,7 @@ const initChart = () => {
       type: 'radar',
       data: [
         {
-          value: knowledgePoints.value.map(p => p.mastery),
+          value: radarPoints.value.map(p => p.mastery),
           name: '掌握度',
           areaStyle: {
             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -309,9 +337,9 @@ const handleBack = () => {
 }
 
 const handlePointClick = (point: KnowledgePoint) => {
-  const course = courseStore.getCurrentCourse()
+  const courseId = props.courseId ?? courseStore.getCurrentCourse()?.id
   router.push({
-    path: `/course/${course?.id || 1}`,
+    path: `/course/${courseId || 1}`,
     query: { tab: 'graph', highlight: point.id }
   })
 }
@@ -322,10 +350,36 @@ watch(() => filteredPoints.value, () => {
 
 onMounted(() => {
   loadData()
-  
-  window.addEventListener('resize', () => {
-    chartInstance.value?.resize()
-  })
+
+  const handleResize = () => {
+    const el = chartContainer.value
+    if (!el) return
+    if (el.offsetWidth === 0 || el.offsetHeight === 0) {
+      pendingInit = true
+      return
+    }
+    if (pendingInit) {
+      // 容器恢复可见（如切换到诊断 Tab），补齐此前挂起的渲染
+      pendingInit = false
+      initChart()
+    } else {
+      chartInstance.value?.resize()
+    }
+  }
+
+  window.addEventListener('resize', handleResize)
+  if (chartContainer.value && typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(handleResize)
+    resizeObserver.observe(chartContainer.value)
+  }
+})
+
+onUnmounted(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  window.removeEventListener('resize', handleResize)
+  chartInstance.value?.dispose()
+  chartInstance.value = null
 })
 </script>
 
@@ -623,7 +677,7 @@ onMounted(() => {
 }
 
 .radar-page.embedded .chart-container {
-  height: 550px;
+  height: 620px;
 }
 
 .radar-page.embedded .detail-list {

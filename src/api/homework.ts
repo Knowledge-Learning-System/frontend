@@ -19,6 +19,8 @@ export interface HomeworkVO {
   deadline: string
   status: string
   submissionCount: number
+  myScore: number | null
+  myFeedback: string | null
   createTime: string
 }
 

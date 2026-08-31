@@ -392,14 +392,50 @@
             <!-- 诊断 -->
             <el-tab-pane label="诊断" name="diagnosis">
               <div class="embedded-page">
-                <RadarChartPage embedded />
+                <RadarChartPage embedded :course-id="courseId" />
               </div>
             </el-tab-pane>
 
             <!-- 作业 -->
             <el-tab-pane label="作业" name="homework">
-              <div class="embedded-homework">
-                <el-empty description="作业功能开发中" />
+              <div class="embedded-homework" v-loading="homeworkLoading">
+                <el-empty v-if="homeworkList.length === 0 && !homeworkLoading" description="暂无已发布的作业" />
+                <el-table v-else :data="homeworkList" border stripe>
+                  <el-table-column prop="title" label="作业标题" min-width="160" />
+                  <el-table-column prop="description" label="作业描述" min-width="220" show-overflow-tooltip />
+                  <el-table-column label="截止时间" width="170">
+                    <template #default="{ row }">{{ formatHomeworkTime(row.deadline) }}</template>
+                  </el-table-column>
+                  <el-table-column label="状态" width="100">
+                    <template #default="{ row }">
+                      <el-tag :type="row.status === 'closed' ? 'info' : 'success'">
+                        {{ homeworkStatusText[row.status] || row.status }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="我的评分" width="120">
+                    <template #default="{ row }">
+                      <span v-if="row.myScore !== null && row.myScore !== undefined" class="homework-score">
+                        {{ row.myScore }} 分
+                        <el-tooltip v-if="row.myFeedback" :content="row.myFeedback" placement="top">
+                          <el-button link type="primary">反馈</el-button>
+                        </el-tooltip>
+                      </span>
+                      <span v-else class="homework-no-op">-</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="操作" width="160">
+                    <template #default="{ row }">
+                      <el-button
+                        v-if="row.status === 'published'"
+                        type="primary"
+                        size="small"
+                        @click="openSubmitHomework(row)"
+                      >提交作业</el-button>
+                      <span v-else class="homework-no-op">-</span>
+                    </template>
+                  </el-table-column>
+                </el-table>
               </div>
             </el-tab-pane>
           </el-tabs>
@@ -447,6 +483,7 @@
                 :active-panel="activePanel"
                 @toggle-note-panel="toggleNotePanel"
                 @update:active-panel="activePanel = $event"
+                @ended="handleVideoEnded"
               />
             </div>
           </el-dialog>
@@ -457,6 +494,31 @@
             <template #footer>
               <el-button @click="noteEditDialogVisible = false">取消</el-button>
               <el-button type="primary" @click="saveKpNote" :loading="noteSaveLoading">保存</el-button>
+            </template>
+          </el-dialog>
+
+          <!-- 提交作业弹窗 -->
+          <el-dialog
+            v-model="homeworkSubmitDialogVisible"
+            :title="`提交作业 - ${currentSubmitHomework?.title ?? ''}`"
+            width="560px"
+            append-to-body
+          >
+            <div class="homework-submit-info" v-if="currentSubmitHomework">
+              <p class="homework-submit-desc">{{ currentSubmitHomework.description || '暂无描述' }}</p>
+              <p class="homework-submit-deadline">截止时间：{{ formatHomeworkTime(currentSubmitHomework.deadline) }}</p>
+            </div>
+            <el-input
+              v-model="homeworkSubmitContent"
+              type="textarea"
+              :rows="6"
+              placeholder="请输入作业作答内容..."
+              maxlength="5000"
+              show-word-limit
+            />
+            <template #footer>
+              <el-button @click="homeworkSubmitDialogVisible = false">取消</el-button>
+              <el-button type="primary" :loading="homeworkSubmitting" @click="handleSubmitHomework">提交</el-button>
             </template>
           </el-dialog>
 
@@ -479,6 +541,8 @@ import type { SubTopicVO, KnowledgePointTreeNode, KnowledgeNode, KnowledgeLink, 
 import type { VideoResource, CoursewareResource } from '@/api/resource'
 import { trackCoursewareAccess } from '@/api/resource'
 import { getNotes, deleteNote, updateNote, getKnowledgePointNotes, type Note } from '@/api/note'
+import { recordStudy } from '@/api/study'
+import { getHomeworkList, submitHomework, type HomeworkVO } from '@/api/homework'
 import { useCourseStore } from '@/stores/course'
 import { useUserStore } from '@/stores/user'
 import KpTreeNode from '@/components/KpTreeNode.vue'
@@ -634,6 +698,68 @@ async function handleUnenrollCourse() {
     ElMessage.error('移除失败，请重试')
   } finally {
     unenrolling.value = false
+  }
+}
+
+// ---- 作业（学生端） ----
+const homeworkList = ref<HomeworkVO[]>([])
+const homeworkLoading = ref(false)
+
+async function loadHomework() {
+  homeworkLoading.value = true
+  try {
+    const data = await getHomeworkList(courseId.value)
+    // 学生端仅展示已发布的作业
+    homeworkList.value = (data ?? []).filter(h => h.status === 'published')
+  } catch {
+    homeworkList.value = []
+  } finally {
+    homeworkLoading.value = false
+  }
+}
+
+const homeworkStatusText: Record<string, string> = {
+  draft: '草稿',
+  published: '已发布',
+  closed: '已截止',
+}
+
+function formatHomeworkTime(value?: string): string {
+  if (!value) return '-'
+  return value.replace('T', ' ').slice(0, 16)
+}
+
+// ---- 作业提交 ----
+const homeworkSubmitDialogVisible = ref(false)
+const homeworkSubmitting = ref(false)
+const currentSubmitHomework = ref<HomeworkVO | null>(null)
+const homeworkSubmitContent = ref('')
+
+function openSubmitHomework(row: HomeworkVO) {
+  currentSubmitHomework.value = row
+  homeworkSubmitContent.value = ''
+  homeworkSubmitDialogVisible.value = true
+}
+
+async function handleSubmitHomework() {
+  if (!currentSubmitHomework.value) return
+  if (!homeworkSubmitContent.value.trim()) {
+    ElMessage.warning('请输入作业作答内容')
+    return
+  }
+  homeworkSubmitting.value = true
+  try {
+    await submitHomework(currentSubmitHomework.value.id, {
+      content: homeworkSubmitContent.value,
+    })
+    ElMessage.success('作业提交成功')
+    homeworkSubmitDialogVisible.value = false
+    loadHomework()
+  } catch (err: any) {
+    const msg = err?.response?.data?.msg || err?.message || '提交失败，请稍后重试'
+    ElMessage.error(msg)
+  } finally {
+    homeworkSubmitting.value = false
   }
 }
 
@@ -884,6 +1010,16 @@ function openVideoPanel(panel: 'note' | 'discussion') {
   } else {
     showNotePanel.value = true
     activePanel.value = panel
+  }
+}
+
+// 视频播放结束，记录学习
+async function handleVideoEnded() {
+  if (!currentVideo.value) return
+  try {
+    await recordStudy(courseId.value, selectedKpId.value)
+  } catch {
+    // 记录失败不阻塞
   }
 }
 
@@ -1210,6 +1346,7 @@ onMounted(async () => {
   }
   await fetchChapters()
   await fetchGraph()
+  loadHomework()
 
   // 处理路由参数：Tab 切换
   const tabParam = route.query.tab as string

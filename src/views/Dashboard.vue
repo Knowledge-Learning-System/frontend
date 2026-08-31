@@ -5,7 +5,6 @@
       <div class="hero-content">
         <p class="hero-label">融合学科知识图谱与大语言模型的高校个性化在线学习系统</p>
         <h1 class="hero-title">课程大厅</h1>
-        <p class="hero-subtitle">选择你想学习的课程</p>
       </div>
     </section>
 

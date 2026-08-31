@@ -1,5 +1,6 @@
 import request from './request'
 import type { CoursewareResource } from './resource'
+import type { Course } from '@/types/course'
 
 // ---- 类型定义 ----
 
@@ -41,6 +42,11 @@ export interface QuestionPayload {
 }
 
 // ---- API ----
+
+/** 教师"我的课程"（按 course.teacher_id 归属）— GET /courses/my-teaching */
+export const getMyTeachingCourses = () => {
+  return request.get<Course[], Course[]>('/courses/my-teaching')
+}
 
 /** 学生列表 — GET /users/students */
 export const getStudents = () => {

@@ -73,10 +73,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { getCourses } from '@/api/course'
 import type { Course } from '@/types/course'
 import { useUserStore } from '@/stores/user'
-import { listQuestions, addQuestion, updateQuestion, deleteQuestion } from '@/api/teacher'
+import { getMyTeachingCourses, listQuestions, addQuestion, updateQuestion, deleteQuestion } from '@/api/teacher'
 import type { TeacherQuestion, QuestionPayload } from '@/api/teacher'
 
 const userStore = useUserStore()
@@ -88,7 +87,7 @@ const loading = ref(false)
 
 const loadCourses = async () => {
   try {
-    courses.value = await getCourses()
+    courses.value = await getMyTeachingCourses()
     const first = courses.value[0]
     if (first && !selectedCourseId.value) {
       selectedCourseId.value = first.id

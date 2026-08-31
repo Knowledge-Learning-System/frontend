@@ -1,5 +1,6 @@
 import request from './request'
 import type { SubTopicVO, KnowledgePointTreeNode } from '@/types/knowledgeGraph'
+import type { QuestionItem } from './question'
 
 export interface RadarItem {
   id: string
@@ -239,4 +240,70 @@ export const getActiveDays = async (userId: number) => {
   return request.get<{ activeDays: number }, { activeDays: number }>('/users/active-days', {
     params: { userId },
   })
+}
+
+// ===== 学习计划 CRUD =====
+export interface StudyPlanItem {
+  id: number
+  userId: number
+  courseId: number
+  courseName: string
+  startDate: string
+  endDate: string
+  dailyHours: number
+  dailyTarget: number
+  remindTime: string
+  createTime: string
+}
+
+export interface CreatePlanRequest {
+  courseId: number
+  startDate: string
+  endDate: string
+  dailyHours?: number
+  dailyTarget?: number
+  remindTime?: string
+}
+
+export const createPlan = (data: CreatePlanRequest) => {
+  return request.post<StudyPlanItem, StudyPlanItem>('/study/plan', data)
+}
+
+export const updatePlan = (id: number, data: Partial<CreatePlanRequest>) => {
+  return request.put<StudyPlanItem, StudyPlanItem>(`/study/plan/${id}`, data)
+}
+
+export const deletePlan = (id: number) => {
+  return request.delete(`/study/plan/${id}`)
+}
+
+export const getMyPlans = (courseId?: number) => {
+  return request.get<StudyPlanItem[], StudyPlanItem[]>('/study/plans', { params: { courseId } })
+}
+
+// ===== 学习记录 & 每日测试 =====
+export const recordStudy = (courseId: number, knowledgePointId: string) => {
+  return request.post('/study/record', { courseId, knowledgePointId })
+}
+
+export const getDailyQuiz = (courseId: number) => {
+  return request.get<QuestionItem[], QuestionItem[]>('/study/daily-quiz', { params: { courseId } })
+}
+
+// ===== 通知 =====
+export interface NotificationItem {
+  id: number
+  userId: number
+  content: string
+  type: string
+  isRead: number
+  createTime: string
+}
+
+export const getNotifications = () => {
+  return request.get<NotificationItem[], NotificationItem[]>('/notifications')
+}
+
+export const markNotificationsRead = () => {
+  return request.put('/notifications/read')
 }

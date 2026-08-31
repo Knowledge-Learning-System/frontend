@@ -45,7 +45,7 @@
     </el-dialog>
 
     <!-- 上传学习资料 -->
-    <el-dialog v-model="uploadDialogVisible" title="上传教学资源" width="640px">
+    <el-dialog v-model="uploadDialogVisible" title="上传教学资源" width="780px">
       <el-form label-width="90px">
         <el-form-item label="所属课程">
           <el-select v-model="uploadForm.courseId" placeholder="请选择课程" style="width: 100%" @change="handleCourseChange">
@@ -53,19 +53,24 @@
           </el-select>
         </el-form-item>
         <el-form-item label="选择章节">
-          <el-tree
-            v-if="uploadForm.courseId"
-            ref="chapterTreeRef"
-            :data="chapterTreeData"
-            :props="{ label: 'label', children: 'children' }"
-            node-key="id"
-            highlight-current
-            default-expand-all
-            :expand-on-click-node="false"
-            @node-click="handleNodeClick"
-            style="max-height: 240px; overflow: auto; border: 1px solid #e4e7ed; border-radius: 4px; padding: 8px;"
-          />
-          <el-empty v-else description="请先选择课程" :image-size="60" />
+          <div class="chapter-picker">
+            <el-tree
+              v-if="uploadForm.courseId"
+              ref="chapterTreeRef"
+              :data="chapterTreeData"
+              :props="{ label: 'label', children: 'children' }"
+              node-key="id"
+              highlight-current
+              default-expand-all
+              :expand-on-click-node="false"
+              class="chapter-tree"
+              @node-click="handleNodeClick"
+            />
+            <el-empty v-else description="请先选择课程" :image-size="60" />
+            <div v-if="selectedNode" class="chapter-selected">
+              已选择：<el-tag size="small" type="primary">{{ selectedNode.label }}</el-tag>
+            </div>
+          </div>
         </el-form-item>
         <el-form-item label="资源类型">
           <el-radio-group v-model="uploadForm.resourceType">
@@ -97,7 +102,7 @@
         <!-- 试题表单 -->
         <template v-else>
           <el-form-item label="题型">
-            <el-select v-model="uploadForm.questionType" style="width: 100%">
+            <el-select v-model="uploadForm.questionType" style="width: 100%" @change="handleQuestionTypeChange">
               <el-option label="单选题" value="single" />
               <el-option label="多选题" value="multiple" />
             </el-select>
@@ -105,11 +110,26 @@
           <el-form-item label="题目内容">
             <el-input v-model="uploadForm.questionContent" type="textarea" :rows="2" placeholder="请输入题目内容" />
           </el-form-item>
-          <el-form-item label="选项">
-            <el-input v-model="uploadForm.questionOptions" type="textarea" :rows="2" placeholder='JSON 数组字符串，如 ["A.xxx","B.xxx","C.xxx","D.xxx"]' />
+          <el-form-item label="选项数量">
+            <el-select v-model="optionCount" placeholder="选择选项个数" style="width: 140px">
+              <el-option v-for="n in 8" :key="n" :label="`${n} 个`" :value="n" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="选项内容">
+            <div class="option-list">
+              <div v-for="(opt, idx) in optionItems" :key="idx" class="option-row">
+                <span class="option-letter">{{ optionLetter(idx) }}</span>
+                <el-input v-model="optionItems[idx]" :placeholder="`请输入选项 ${optionLetter(idx)} 内容`" />
+              </div>
+            </div>
           </el-form-item>
           <el-form-item label="正确答案">
-            <el-input v-model="uploadForm.questionAnswer" placeholder="如 A，多选题如 ABC" />
+            <el-select v-if="uploadForm.questionType === 'single'" v-model="questionAnswerSingle" placeholder="请选择正确答案" style="width: 140px">
+              <el-option v-for="(opt, idx) in currentOptions" :key="idx" :label="optionLetter(idx)" :value="optionLetter(idx)" />
+            </el-select>
+            <el-checkbox-group v-else v-model="questionAnswerMulti">
+              <el-checkbox v-for="(opt, idx) in currentOptions" :key="idx" :label="optionLetter(idx)" />
+            </el-checkbox-group>
           </el-form-item>
           <el-form-item label="答案解析">
             <el-input v-model="uploadForm.questionAnalysis" type="textarea" :rows="2" placeholder="可选" />
@@ -125,12 +145,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, UploadFile } from 'element-plus'
-import { getCourses, addCourse, updateCourse, deleteCourse } from '@/api/course'
+import { addCourse, updateCourse, deleteCourse } from '@/api/course'
 import type { CoursePayload } from '@/api/course'
-import { uploadResource, addQuestion } from '@/api/teacher'
+import { getMyTeachingCourses, uploadResource, addQuestion } from '@/api/teacher'
 import { getChapterStructure } from '@/api/knowledgeGraph'
 import type { SubTopicVO } from '@/types/knowledgeGraph'
 import type { Course } from '@/types/course'
@@ -143,7 +163,7 @@ const loading = ref(false)
 const loadCourses = async () => {
   loading.value = true
   try {
-    courses.value = (await getCourses()) as CourseRow[]
+    courses.value = (await getMyTeachingCourses()) as CourseRow[]
   } catch {
     ElMessage.error('加载课程列表失败')
   } finally {
@@ -234,9 +254,32 @@ const uploadForm = reactive({
   file: null as File | null,
   questionType: 'single',
   questionContent: '',
-  questionOptions: '',
-  questionAnswer: '',
   questionAnalysis: '',
+})
+
+// 正确答案：单选（下拉）或多选（勾选），选项来自当前选项字母
+const questionAnswerSingle = ref('')
+const questionAnswerMulti = ref<string[]>([])
+const currentOptions = computed(() => optionLetters.slice(0, optionCount.value))
+const handleQuestionTypeChange = () => {
+  questionAnswerSingle.value = ''
+  questionAnswerMulti.value = []
+}
+
+// 选项数量 + 动态选项内容（先选数量，再逐项填写）
+const optionCount = ref(4)
+const optionItems = ref<string[]>(['', '', '', ''])
+const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+const optionLetter = (idx: number) => optionLetters[idx] || String.fromCharCode(65 + idx)
+
+watch(optionCount, (n) => {
+  const arr = [...optionItems.value]
+  if (arr.length < n) {
+    for (let i = arr.length; i < n; i++) arr.push('')
+    optionItems.value = arr
+  } else if (arr.length > n) {
+    optionItems.value = arr.slice(0, n)
+  }
 })
 
 // 章节树（选课程 → 选章节/知识点节点）
@@ -289,9 +332,11 @@ const openUploadDialog = (row?: CourseRow) => {
   uploadForm.file = null
   uploadForm.questionType = 'single'
   uploadForm.questionContent = ''
-  uploadForm.questionOptions = ''
-  uploadForm.questionAnswer = ''
   uploadForm.questionAnalysis = ''
+  questionAnswerSingle.value = ''
+  questionAnswerMulti.value = []
+  optionCount.value = 4
+  optionItems.value = ['', '', '', '']
   uploadFileList.value = []
   selectedNode.value = null
   chapterTreeData.value = []
@@ -318,17 +363,38 @@ const handleUpload = async () => {
   uploading.value = true
   try {
     if (uploadForm.resourceType === 'question') {
-      if (!uploadForm.questionContent || !uploadForm.questionOptions || !uploadForm.questionAnswer) {
+      const filledOptions = optionItems.value
+        .slice(0, optionCount.value)
+        .map((t, i) => `${optionLetter(i)}.${(t || '').trim()}`)
+      if (!uploadForm.questionContent) {
         ElMessage.warning('请填写完整的试题信息')
         return
+      }
+      if (filledOptions.some((o) => o.endsWith('.'))) {
+        ElMessage.warning('请填写所有选项内容')
+        return
+      }
+      let answer: string
+      if (uploadForm.questionType === 'single') {
+        if (!questionAnswerSingle.value) {
+          ElMessage.warning('请选择正确答案')
+          return
+        }
+        answer = questionAnswerSingle.value
+      } else {
+        if (questionAnswerMulti.value.length === 0) {
+          ElMessage.warning('请选择正确答案')
+          return
+        }
+        answer = [...questionAnswerMulti.value].sort().join('')
       }
       await addQuestion({
         courseId: uploadForm.courseId,
         knowledgePointId: nodeId,
         type: uploadForm.questionType,
         content: uploadForm.questionContent,
-        options: uploadForm.questionOptions,
-        answer: uploadForm.questionAnswer,
+        options: JSON.stringify(filledOptions),
+        answer,
         analysis: uploadForm.questionAnalysis || undefined,
       })
       ElMessage.success('试题添加成功')
@@ -381,5 +447,52 @@ onMounted(loadCourses)
 .header-actions {
   display: flex;
   gap: 8px;
+}
+
+.chapter-picker {
+  width: 100%;
+}
+
+.chapter-tree {
+  width: 100%;
+  max-height: 380px;
+  overflow: auto;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.chapter-selected {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #606266;
+}
+
+.option-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.option-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.option-letter {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  line-height: 26px;
+  text-align: center;
+  border-radius: 50%;
+  background: #ecf5ff;
+  color: #409eff;
+  font-weight: 600;
+  font-size: 14px;
 }
 </style>

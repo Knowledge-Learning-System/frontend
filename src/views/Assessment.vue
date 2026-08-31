@@ -88,6 +88,11 @@
       </div>
     </div>
 
+    <!-- 无题目空态 -->
+    <div class="assessment-empty" v-else-if="!showResult && questions.length === 0">
+      <el-empty description="该知识点下暂无测评题目" />
+    </div>
+
     <!-- 结果页面 -->
     <div class="assessment-result" v-else>
       <div class="result-card">
@@ -272,8 +277,9 @@ import { ElMessage } from 'element-plus'
 import {
   ArrowLeft, CircleCheckFilled, CircleCloseFilled, Document, SuccessFilled,
 } from '@element-plus/icons-vue'
-import { MOCK_CHAPTERS } from '@/api/knowledgeGraph'
+import { getQuestions, submitAnswers } from '@/api/question'
 import { useCourseStore } from '@/stores/course'
+import { useUserStore } from '@/stores/user'
 
 interface Question {
   id: string
@@ -322,116 +328,20 @@ const props = defineProps<{
 const route = useRoute()
 const router = useRouter()
 
+const userStore = useUserStore()
+const userId = computed(() => userStore.userInfo?.id ?? 0)
+const courseId = computed(() => userStore.currentCourseId ?? 0)
+
+// 当前题目是否来自后端真实题库（决定提交走后端 API 判分入库）
+const fromBackend = ref(false)
+
 const nodeName = ref(props.title || (route.query.nodeName as string) || '知识点测评')
 const nodeId = ref(route.query.nodeId as string || '')
 
-// 默认硬编码 mock 题（fallback：当 nodeId 未匹配到数据时使用）
-const DEFAULT_QUESTIONS: Question[] = [
-  {
-    id: 'q1',
-    type: 'single',
-    text: '软件工程的核心目标是？',
-    options: [
-      { key: 'A', text: '编写高质量的代码' },
-      { key: 'B', text: '在预算和时间内交付满足需求的软件' },
-      { key: 'C', text: '使用最新的编程技术' },
-      { key: 'D', text: '减少开发人员数量' },
-    ],
-    correctAnswer: 'B',
-    explanation: '软件工程的核心目标是在给定的预算和时间约束下，交付满足用户需求的、高质量的软件产品。选项 B 最全面地描述了这一目标。',
-  },
-  {
-    id: 'q2',
-    type: 'single',
-    text: '以下哪个不是软件测试的基本原则？',
-    options: [
-      { key: 'A', text: '测试显示缺陷的存在' },
-      { key: 'B', text: '穷尽测试是不可能的' },
-      { key: 'C', text: '测试可以证明软件没有缺陷' },
-      { key: 'D', text: '缺陷具有群集性' },
-    ],
-    correctAnswer: 'C',
-    explanation: '测试只能证明缺陷的存在，而不能证明软件没有缺陷。这是软件测试的基本原则之一。',
-  },
-  {
-    id: 'q3',
-    type: 'multiple',
-    text: '敏捷开发方法的特点包括？（多选）',
-    options: [
-      { key: 'A', text: '迭代式开发' },
-      { key: 'B', text: '客户需求优先' },
-      { key: 'C', text: '严格的文档要求' },
-      { key: 'D', text: '快速响应变化' },
-    ],
-    correctAnswer: ['A', 'B', 'D'],
-    explanation: '敏捷开发强调迭代式开发、客户需求优先、快速响应变化，而不强调严格的文档要求。敏捷宣言明确指出"工作的软件高于详尽的文档"。',
-  },
-  {
-    id: 'q4',
-    type: 'single',
-    text: 'JUnit 主要用于哪种编程语言的单元测试？',
-    options: [
-      { key: 'A', text: 'Python' },
-      { key: 'B', text: 'Java' },
-      { key: 'C', text: 'JavaScript' },
-      { key: 'D', text: 'C++' },
-    ],
-    correctAnswer: 'B',
-    explanation: 'JUnit 是 Java 语言的单元测试框架，广泛用于 Java 项目的单元测试实践。',
-  },
-  {
-    id: 'q5',
-    type: 'multiple',
-    text: '以下哪些属于软件质量特性？（多选）',
-    options: [
-      { key: 'A', text: '功能性' },
-      { key: 'B', text: '可靠性' },
-      { key: 'C', text: '可维护性' },
-      { key: 'D', text: '代码行数' },
-    ],
-    correctAnswer: ['A', 'B', 'C'],
-    explanation: '软件质量特性包括功能性、可靠性、可维护性、效率、可移植性等。代码行数是规模度量，不是质量特性。',
-  },
-]
-
-const questions = ref<Question[]>([...DEFAULT_QUESTIONS])
+// 测评题目默认空，仅由外部传入或后端题库加载；不再内置写死的 mock 题
+const questions = ref<Question[]>([])
 
 // --- 数据提取工具函数 ---
-/** 递归查找匹配 nodeId 的 SubTopicVO */
-function findSubTopic(nodes: any[], targetId: string): any | null {
-  for (const node of nodes) {
-    if (node.id === targetId) return node
-    if (node.knowledgePoints) {
-      const found = findSubTopic(node.knowledgePoints, targetId)
-      if (found) return found
-    }
-    if (node.children) {
-      const found = findSubTopic(node.children, targetId)
-      if (found) return found
-    }
-  }
-  return null
-}
-
-/** 递归收集节点及其所有子孙节点中的 questions */
-function collectQuestions(node: any): any[] {
-  let all: any[] = []
-  if (node.questions && node.questions.length > 0) {
-    all = all.concat(node.questions)
-  }
-  if (node.knowledgePoints) {
-    for (const kp of node.knowledgePoints) {
-      all = all.concat(collectQuestions(kp))
-    }
-  }
-  if (node.children) {
-    for (const child of node.children) {
-      all = all.concat(collectQuestions(child))
-    }
-  }
-  return all
-}
-
 /** Fisher-Yates 洗牌 */
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -442,22 +352,28 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
-/** 格式转换：knowledgeGraph.ts 数据结构 → Question */
+/** 格式转换：后端 QuestionItem / 知识图谱数据结构 → Question */
 function convertQuestion(q: any): Question {
   let type: 'single' | 'multiple' = 'single'
   if (q.type === 'multiple') type = 'multiple'
 
   let options: { key: string; text: string }[] = []
+  const raw = typeof q.options === 'string' ? q.options : (q.options ? JSON.stringify(q.options) : '')
   try {
-    const rawOptions: string[] = typeof q.options === 'string' ? JSON.parse(q.options) : q.options
-    options = rawOptions.map((opt: string) => {
-      const match = opt.match(/^([A-Z])\.\s*(.+)/)
-      if (match) {
-        return { key: match[1], text: match[2] }
-      }
-      return { key: '', text: opt }
-    })
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      options = parsed.map((text: string, i: number) => {
+        const clean = String(text).replace(/^[A-Z][.、，)）]\s*/, '').trim()
+        return { key: String.fromCharCode(65 + i), text: clean }
+      })
+    }
   } catch { /* options 解析失败时保持空数组 */ }
+  if (options.length === 0 && raw) {
+    options = raw.split(/[;,]/).filter(Boolean).map((text: string, i: number) => ({
+      key: String.fromCharCode(65 + i),
+      text: text.replace(/^[A-Z][.、，)）]\s*/, '').trim(),
+    }))
+  }
 
   return {
     id: String(q.id),
@@ -563,36 +479,69 @@ const handleNext = () => {
 
 const handleSubmit = async () => {
   submitting.value = true
-  
+
   // 保存当前答案
   const currentQ = questions.value[currentQuestionIndex.value]
   if (currentQ && currentQuestion.value) {
-    currentQ.userAnswer = currentQuestion.value.type === 'single' 
-      ? selectedAnswers.value[0] 
+    currentQ.userAnswer = currentQuestion.value.type === 'single'
+      ? selectedAnswers.value[0]
       : selectedAnswers.value
   }
-  
-  // 计算得分
-  let correct = 0
-  questions.value.forEach(q => {
-    if (q.type === 'single') {
-      if (q.userAnswer === q.correctAnswer) correct++
-    } else {
-      const userAns = Array.isArray(q.userAnswer) ? q.userAnswer : [q.userAnswer]
-      const correctAns = Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer]
-      if (JSON.stringify(userAns.sort()) === JSON.stringify(correctAns.sort())) correct++
-    }
-  })
-  
-  correctCount.value = correct
-  score.value = correct * 3
+
   timeSpent.value = formatTimeSpent(Date.now() - startTime.value)
-  
-  setTimeout(() => {
-    showResult.value = true
-    submitting.value = false
-    saveRecord()
-  }, 500)
+
+  // 后端真实题 → 交由后端判分并写入行为记录
+  if (fromBackend.value) {
+    try {
+      const result = await submitAnswers({
+        userId: userId.value,
+        courseId: courseId.value,
+        answers: questions.value.map((q) => ({
+          questionId: Number(q.id),
+          knowledgePointId: q.knowledgePointId || '',
+          answer: Array.isArray(q.userAnswer)
+            ? (q.userAnswer as string[]).join(',')
+            : ((q.userAnswer as string) || ''),
+        })),
+      })
+      const answerMap = new Map<number, { correct: string; analysis: string }>()
+      ;(result.items || []).forEach(item => {
+        answerMap.set(item.questionId, { correct: item.correctAnswer, analysis: item.analysis })
+      })
+      // 回填正确答案与解析，供错题解析/历史快照展示
+      questions.value.forEach(q => {
+        const back = answerMap.get(Number(q.id))
+        if (back) {
+          q.correctAnswer = back.correct
+          q.explanation = back.analysis
+        }
+      })
+      correctCount.value = result.correctCount ?? 0
+      score.value = correctCount.value * 3
+    } catch (err: any) {
+      ElMessage.error(err?.message || err?.response?.data?.msg || '答案提交失败，请重试')
+      submitting.value = false
+      return
+    }
+  } else {
+    // 本地 mock 判分（外部传入题目 / 默认题保留原逻辑）
+    let correct = 0
+    questions.value.forEach(q => {
+      if (q.type === 'single') {
+        if (q.userAnswer === q.correctAnswer) correct++
+      } else {
+        const userAns = Array.isArray(q.userAnswer) ? q.userAnswer : [q.userAnswer]
+        const correctAns = Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer]
+        if (JSON.stringify(userAns.sort()) === JSON.stringify(correctAns.sort())) correct++
+      }
+    })
+    correctCount.value = correct
+    score.value = correct * 3
+  }
+
+  showResult.value = true
+  submitting.value = false
+  saveRecord()
 }
 
 const formatTimeSpent = (ms: number) => {
@@ -722,6 +671,7 @@ onMounted(() => {
   // 如果外部传入了题目，直接使用
   if (props.questions && props.questions.length > 0) {
     questions.value = props.questions
+    fromBackend.value = false
     return
   }
   loadQuestionsForNode()
@@ -731,6 +681,7 @@ onMounted(() => {
 watch(() => props.questions, (newQuestions) => {
   if (newQuestions && newQuestions.length > 0) {
     questions.value = newQuestions
+    fromBackend.value = false
     resetAssessmentState()
   }
 })
@@ -758,27 +709,35 @@ function resetAssessmentState() {
   correctCount.value = 0
 }
 
-function loadQuestionsForNode() {
+async function loadQuestionsForNode() {
   if (!nodeId.value) {
-    ElMessage.warning('未指定知识点，将使用默认题目')
-    questions.value = [...DEFAULT_QUESTIONS]
+    ElMessage.warning('未指定知识点')
+    questions.value = []
+    fromBackend.value = false
     return
   }
-  const target = findSubTopic(MOCK_CHAPTERS as any[], nodeId.value)
-  if (!target) {
-    ElMessage.warning('未匹配到对应知识点，将使用默认题目')
-    questions.value = [...DEFAULT_QUESTIONS]
+  if (!courseId.value || !userId.value) {
+    ElMessage.warning('未获取到课程/用户信息，无法加载测评题目')
+    questions.value = []
+    fromBackend.value = false
     return
   }
-  const allRaw = collectQuestions(target)
-  if (allRaw.length === 0) {
-    ElMessage.warning('该知识点下暂无可测评题目，使用默认题目')
-    questions.value = [...DEFAULT_QUESTIONS]
-    return
+  try {
+    const list = await getQuestions(courseId.value, userId.value, nodeId.value)
+    if (!list || list.length === 0) {
+      ElMessage.warning('该知识点下暂无测评题目')
+      questions.value = []
+      fromBackend.value = false
+      return
+    }
+    const selected = shuffle(list).slice(0, 10)
+    questions.value = selected.map(convertQuestion)
+    fromBackend.value = true
+  } catch (err: any) {
+    ElMessage.error(err?.message || err?.response?.data?.msg || '加载测评题目失败')
+    questions.value = []
+    fromBackend.value = false
   }
-  const shuffled = shuffle(allRaw)
-  const selected = shuffled.slice(0, 10)
-  questions.value = selected.map(convertQuestion)
 }
 </script>
 

@@ -96,8 +96,18 @@ const router = createRouter({
     {
       path: '/teacher',
       component: () => import('@/layouts/TeacherLayout.vue'),
-      redirect: '/teacher/courses',
+      redirect: '/teacher/hall',
       children: [
+        {
+          path: 'hall',
+          name: 'TeacherCourseHall',
+          component: () => import('@/views/teacher/TeacherCourseHall.vue'),
+        },
+        {
+          path: 'knowledge/:courseId/:kpId',
+          name: 'TeacherKnowledgePointDetail',
+          component: () => import('@/views/teacher/TeacherKnowledgePointDetail.vue'),
+        },
         {
           path: 'courses',
           name: 'TeacherCourses',
@@ -134,7 +144,7 @@ router.beforeEach(async (to) => {
   if (to.meta.public) {
     if (userStore.isLoggedIn && (to.path === '/login' || to.path === '/register')) {
       const role = userStore.userInfo?.role
-      return role === 'teacher' ? '/teacher/courses' : '/dashboard'
+      return role === 'teacher' ? '/teacher/hall' : '/dashboard'
     }
     return true
   }
@@ -161,7 +171,7 @@ router.beforeEach(async (to) => {
 
   // 教师访问任何非教师端页面 → 锁死在教师端
   if (role === 'teacher' && !to.path.startsWith('/teacher')) {
-    return '/teacher/courses'
+    return '/teacher/hall'
   }
 
   return true

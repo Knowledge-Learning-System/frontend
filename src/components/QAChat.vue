@@ -255,22 +255,21 @@ async function handleSend() {
   scrollToBottom()
 
   try {
-    // 第一步延迟：模拟检索耗时
-    await new Promise((resolve) => setTimeout(resolve, 400 + Math.random() * 300))
-    loadingStep.value = 'generating'
-    await nextTick()
+    // 检索/生成分步反馈：约 1.2s 后认为检索阶段结束进入生成阶段
+    const stepTimer = setTimeout(() => {
+      loadingStep.value = 'generating'
+    }, 1200)
 
     // 构建对话历史（最近 10 条，不含当前正在等待回答的用户消息）
     const history: ApiChatMessage[] = messages.value
-      .filter((m) => m.role !== 'assistant' || m.sources === undefined ? false : true)
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .slice(0, -1)
       .slice(-10)
       .map((m) => ({ role: m.role, content: m.content }))
 
-    // 调用管道式问答 API
+    // 调用 GraphRAG 问答 API
     const res = await askQuestion(text, history, props.courseId)
-
-    // 模拟 LLM 生成延迟
-    await new Promise((resolve) => setTimeout(resolve, 300 + Math.random() * 400))
+    clearTimeout(stepTimer)
 
     messages.value.push({
       id: genId(),
@@ -280,6 +279,7 @@ async function handleSend() {
       sources: res.sources,
     })
   } catch {
+    clearTimeout(stepTimer)
     messages.value.push({
       id: genId(),
       role: 'assistant',

@@ -23,6 +23,10 @@
         router
         class="sidebar-menu"
       >
+        <el-menu-item index="/teacher/hall">
+          <el-icon><Grid /></el-icon>
+          <template #title>课程大厅</template>
+        </el-menu-item>
         <el-menu-item index="/teacher/courses">
           <el-icon><Reading /></el-icon>
           <template #title>课程管理</template>
@@ -87,6 +91,7 @@ import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import {
+  Grid,
   Reading,
   User,
   Document,
@@ -104,6 +109,7 @@ const userInfo = computed(() => userStore.userInfo)
 const activeMenu = computed(() => route.path)
 
 const pageTitleMap: Record<string, string> = {
+  '/teacher/hall': '课程大厅',
   '/teacher/courses': '课程管理',
   '/teacher/students': '学生管理',
   '/teacher/homework': '作业管理',
