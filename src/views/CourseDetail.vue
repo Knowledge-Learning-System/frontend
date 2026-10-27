@@ -64,6 +64,15 @@
           <div class="panel-placeholder">
             <el-icon :size="48" color="#c0c4cc"><Reading /></el-icon>
             <p>请从左侧选择一个章节或知识点</p>
+            <el-button
+              v-if="subTopics.length"
+              type="primary"
+              size="small"
+              class="start-assessment-btn"
+              @click="selectFirstChapterForAssessment"
+            >
+              进入章节测评
+            </el-button>
           </div>
         </template>
         <template v-else-if="!selectedKp && selectedSubTopic">
@@ -234,23 +243,39 @@
 
                 <div class="quiz-question-card">
                   <div class="quiz-question-type">
-                    <el-tag :type="(currentQ?.type === 'single' || currentQ?.type === 'judge') ? 'primary' : 'warning'" size="small">
-                      {{ (currentQ?.type === 'single' || currentQ?.type === 'judge') ? '单选题' : '多选题' }}
+                    <el-tag
+                      :type="(currentQ?.type === 'single' || currentQ?.type === 'judge') ? 'primary' : currentQ?.type === 'multiple' ? 'warning' : currentQ?.type === 'fill' ? 'success' : 'info'"
+                      size="small"
+                    >
+                      {{ questionTypeLabel(currentQ?.type) }}
                     </el-tag>
                   </div>
                   <h2 class="quiz-question-text">{{ currentQ?.content }}</h2>
 
-                  <div class="quiz-option-list">
+                  <!-- 选择题选项 -->
+                  <div v-if="isQuizChoiceType(currentQ?.type)" class="quiz-option-list">
                     <div
                       v-for="opt in parseOptions(currentQ?.options || '')"
                       :key="opt.key"
                       class="quiz-option-item"
-                      :class="{ 'option-selected': selectedAnswer === opt.key }"
+                      :class="{ 'option-selected': selectedAnswers.includes(opt.key) }"
                       @click="selectQuizOption(opt.key)"
                     >
                       <div class="quiz-option-key">{{ opt.key }}</div>
                       <div class="quiz-option-text">{{ opt.text }}</div>
                     </div>
+                  </div>
+
+                  <!-- 填空题输入 -->
+                  <div v-else-if="currentQ?.type === 'fill'" class="quiz-text-answer-area">
+                    <div class="quiz-text-answer-label">请输入答案（多空用 | 分隔）：</div>
+                    <el-input v-model="textAnswer" placeholder="例如：DISTINCT|PRIMARY KEY" size="large" clearable />
+                  </div>
+
+                  <!-- 问答题输入 -->
+                  <div v-else-if="currentQ?.type === 'qa'" class="quiz-text-answer-area">
+                    <div class="quiz-text-answer-label">请输入你的回答（支持多行）：</div>
+                    <el-input v-model="textAnswer" type="textarea" :rows="6" resize="vertical" placeholder="请在此输入答案或代码…" />
                   </div>
 
                   <div class="quiz-nav-buttons">
@@ -259,13 +284,13 @@
                       v-if="currentQIndex < questions.length - 1"
                       type="primary"
                       @click="handleQuizNext"
-                      :disabled="!selectedAnswer"
+                      :disabled="!canGoNext"
                     >下一题</el-button>
                     <el-button
                       v-if="currentQIndex === questions.length - 1"
                       type="success"
                       @click="submitQuiz"
-                      :disabled="!selectedAnswer"
+                      :disabled="!canGoNext"
                       :loading="submitLoading"
                     >提交答案</el-button>
                   </div>
@@ -327,30 +352,52 @@
                     <div class="quiz-analysis-question-header">
                       <span class="quiz-analysis-question-text">{{ item.content }}</span>
                     </div>
-                    <div class="quiz-analysis-options">
+
+                    <!-- 选择题解析：只高亮用户选择的选项，选对为绿、选错为红 -->
+                    <div v-if="isQuizChoiceType(item.type)" class="quiz-analysis-options">
                       <div v-for="opt in parseOptions(item.options)" :key="opt.key" class="quiz-analysis-opt">
                         <div
                           class="quiz-option-key"
                           :class="{
-                            'opt-correct': opt.key === item.correctAnswer,
-                            'opt-wrong': opt.key === item.userAnswer && !item.isCorrect
+                            'opt-correct': isAnswerKeyIncluded(item.userAnswer, opt.key) && isAnswerKeyIncluded(item.correctAnswer, opt.key),
+                            'opt-wrong': isAnswerKeyIncluded(item.userAnswer, opt.key) && !isAnswerKeyIncluded(item.correctAnswer, opt.key)
                           }"
                         >{{ opt.key }}</div>
                         <span
                           class="quiz-analysis-opt-text"
                           :class="{
-                            'text-correct': opt.key === item.correctAnswer,
-                            'text-wrong': opt.key === item.userAnswer && !item.isCorrect
+                            'text-correct': isAnswerKeyIncluded(item.userAnswer, opt.key) && isAnswerKeyIncluded(item.correctAnswer, opt.key),
+                            'text-wrong': isAnswerKeyIncluded(item.userAnswer, opt.key) && !isAnswerKeyIncluded(item.correctAnswer, opt.key)
                           }"
                         >{{ opt.text }}</span>
-                        <el-icon v-if="opt.key === item.correctAnswer" class="opt-icon-correct" :size="18"><CircleCheckFilled /></el-icon>
-                        <el-icon v-if="opt.key === item.userAnswer && !item.isCorrect" class="opt-icon-wrong" :size="18"><CircleCloseFilled /></el-icon>
+                        <el-icon v-if="isAnswerKeyIncluded(item.userAnswer, opt.key) && isAnswerKeyIncluded(item.correctAnswer, opt.key)" class="opt-icon-correct" :size="18"><CircleCheckFilled /></el-icon>
+                        <el-icon v-if="isAnswerKeyIncluded(item.userAnswer, opt.key) && !isAnswerKeyIncluded(item.correctAnswer, opt.key)" class="opt-icon-wrong" :size="18"><CircleCloseFilled /></el-icon>
                       </div>
                     </div>
+
+                    <!-- 第一个灰色框：你的答案 + 正确答案（所有题型） -->
+                    <div class="quiz-text-analysis">
+                      <div class="quiz-text-analysis-row">
+                        <span class="quiz-text-analysis-label">你的答案：</span>
+                        <span
+                          class="quiz-text-analysis-value"
+                          :class="item.isCorrect ? 'text-correct' : 'text-wrong'"
+                        >
+                          {{ getUserAnswerDisplay(item) }}
+                        </span>
+                      </div>
+                      <div class="quiz-text-analysis-row">
+                        <span class="quiz-text-analysis-label">{{ item.type === 'qa' ? '参考答案：' : '正确答案：' }}</span>
+                        <span class="quiz-text-analysis-value text-correct">{{ getCorrectAnswerDisplay(item) }}</span>
+                      </div>
+                      <div v-if="item.type === 'qa'" class="quiz-text-analysis-tip">* 问答题为开放性题目，结果仅供参考，实际请等待教师评分。</div>
+                    </div>
+
+                    <!-- 第二个灰色框：详细解析 -->
                     <div class="quiz-analysis-explanation">
                       <el-icon><Document /></el-icon>
-                      <span>解析：</span>
-                      <span>{{ item.analysis || '暂无' }}</span>
+                      <span class="quiz-analysis-explanation-label">解析：</span>
+                      <span class="quiz-analysis-explanation-text">{{ getAnalysisDisplay(item) }}</span>
                     </div>
                   </div>
                 </div>
@@ -370,14 +417,104 @@
                   <div
                     v-for="(record, ri) in [...quizBatchScores[historyDialogBatchIdx]].reverse()"
                     :key="ri"
-                    class="history-item"
+                    class="history-item history-item-clickable"
+                    @click="openHistoryDetail(record)"
                   >
                     <span class="history-index">第{{ quizBatchScores[historyDialogBatchIdx].length - ri }}次</span>
                     <span class="history-score">{{ record.correctCount }}/{{ record.totalQuestions }} 正确</span>
                     <span class="history-pct">{{ Math.round((record.correctCount / record.totalQuestions) * 100) }}%</span>
                     <span class="history-score-val">{{ record.correctCount * 3 }} 分</span>
+                    <el-icon class="history-chevron"><ArrowRight /></el-icon>
                   </div>
                   <el-empty v-if="quizBatchScores[historyDialogBatchIdx].length === 0" description="暂无记录" :image-size="40" />
+                </template>
+              </el-dialog>
+
+              <!-- 历史记录详情弹窗 -->
+              <el-dialog
+                :model-value="historyDetailRecord !== null"
+                title="答题详情"
+                width="760px"
+                top="5vh"
+                @update:model-value="(val: boolean) => { if (!val) historyDetailRecord = null }"
+              >
+                <template v-if="historyDetailRecord">
+                  <div class="history-detail-summary">
+                    <span class="history-detail-score">{{ historyDetailRecord.correctCount }}/{{ historyDetailRecord.totalQuestions }} 正确</span>
+                    <span class="history-detail-pct">{{ Math.round((historyDetailRecord.correctCount / historyDetailRecord.totalQuestions) * 100) }}%</span>
+                    <span class="history-detail-val">{{ historyDetailRecord.correctCount * 3 }} 分</span>
+                  </div>
+
+                  <div v-if="!historyDetailRecord.items || historyDetailRecord.items.length === 0" class="history-detail-empty">
+                    本次记录未保存每道题的作答详情，仅能看到总分。
+                  </div>
+
+                  <div v-else class="quiz-analysis-section history-detail-section">
+                    <el-alert
+                      v-if="isHistoryDetailLegacy"
+                      title="旧记录提示"
+                      type="warning"
+                      :closable="false"
+                      description="该记录是在功能升级前保存的，因此无法显示你的作答答案。重新测试一次即可查看完整详情。"
+                      class="history-detail-legacy-alert"
+                    />
+                    <div
+                      v-for="(item, idx) in historyDetailItems"
+                      :key="item.questionId"
+                      class="quiz-analysis-card"
+                    >
+                      <div class="quiz-analysis-question-header">
+                        <span class="quiz-analysis-question-text">{{ idx + 1 }}. {{ item.content || `题目 ${item.questionId}` }}</span>
+                      </div>
+
+                      <!-- 选择题解析：只高亮用户选择的选项，选对为绿、选错为红 -->
+                      <div v-if="isQuizChoiceType(item.type)" class="quiz-analysis-options">
+                        <div v-for="opt in parseOptions(item.options || '')" :key="opt.key" class="quiz-analysis-opt">
+                          <div
+                            class="quiz-option-key"
+                            :class="{
+                              'opt-correct': isAnswerKeyIncluded(item.userAnswer, opt.key) && isAnswerKeyIncluded(item.correctAnswer, opt.key),
+                              'opt-wrong': isAnswerKeyIncluded(item.userAnswer, opt.key) && !isAnswerKeyIncluded(item.correctAnswer, opt.key)
+                            }"
+                          >{{ opt.key }}</div>
+                          <span
+                            class="quiz-analysis-opt-text"
+                            :class="{
+                              'text-correct': isAnswerKeyIncluded(item.userAnswer, opt.key) && isAnswerKeyIncluded(item.correctAnswer, opt.key),
+                              'text-wrong': isAnswerKeyIncluded(item.userAnswer, opt.key) && !isAnswerKeyIncluded(item.correctAnswer, opt.key)
+                            }"
+                          >{{ opt.text }}</span>
+                          <el-icon v-if="isAnswerKeyIncluded(item.userAnswer, opt.key) && isAnswerKeyIncluded(item.correctAnswer, opt.key)" class="opt-icon-correct" :size="18"><CircleCheckFilled /></el-icon>
+                          <el-icon v-if="isAnswerKeyIncluded(item.userAnswer, opt.key) && !isAnswerKeyIncluded(item.correctAnswer, opt.key)" class="opt-icon-wrong" :size="18"><CircleCloseFilled /></el-icon>
+                        </div>
+                      </div>
+
+                      <!-- 第一个灰色框：你的答案 + 正确答案 -->
+                      <div class="quiz-text-analysis">
+                        <div class="quiz-text-analysis-row">
+                          <span class="quiz-text-analysis-label">你的答案：</span>
+                          <span
+                            class="quiz-text-analysis-value"
+                            :class="item.isCorrect ? 'text-correct' : 'text-wrong'"
+                          >
+                            {{ getUserAnswerDisplay(item) }}
+                          </span>
+                        </div>
+                        <div class="quiz-text-analysis-row">
+                          <span class="quiz-text-analysis-label">{{ item.type === 'qa' ? '参考答案：' : '正确答案：' }}</span>
+                          <span class="quiz-text-analysis-value text-correct">{{ getCorrectAnswerDisplay(item) }}</span>
+                        </div>
+                        <div v-if="item.type === 'qa'" class="quiz-text-analysis-tip">* 问答题为开放性题目，结果仅供参考，实际请等待教师评分。</div>
+                      </div>
+
+                      <!-- 第二个灰色框：详细解析 -->
+                      <div class="quiz-analysis-explanation">
+                        <el-icon><Document /></el-icon>
+                        <span class="quiz-analysis-explanation-label">解析：</span>
+                        <span class="quiz-analysis-explanation-text">{{ item.analysis || '暂无' }}</span>
+                      </div>
+                    </div>
+                  </div>
                 </template>
               </el-dialog>
             </el-tab-pane>
@@ -533,10 +670,11 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { VideoPlay, Document, Reading, CircleCheckFilled, CircleCloseFilled, SuccessFilled, Edit, Delete, Notebook, ChatDotRound, ArrowLeft } from '@element-plus/icons-vue'
+import { VideoPlay, Document, Reading, CircleCheckFilled, CircleCloseFilled, SuccessFilled, Edit, Delete, Notebook, ChatDotRound, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getKnowledgeGraph, getChapterStructure } from '@/api/knowledgeGraph'
 import { getQuestions, submitAnswers, type QuestionItem, type SubmitAnswerResult } from '@/api/question'
+import { getMockQuestions } from '@/api/mockQuestions'
 import type { SubTopicVO, KnowledgePointTreeNode, KnowledgeNode, KnowledgeLink, GraphData, AnswerDetail } from '@/types/knowledgeGraph'
 import type { VideoResource, CoursewareResource } from '@/api/resource'
 import { trackCoursewareAccess } from '@/api/resource'
@@ -571,7 +709,7 @@ const chapterAssessmentQuestions = ref<AssessmentQuestion[]>([])
 // AssessmentPage 需要的题目格式
 interface AssessmentQuestion {
   id: string
-  type: 'single' | 'multiple'
+  type: 'single' | 'multiple' | 'fill' | 'qa'
   text: string
   options: { key: string; text: string }[]
   correctAnswer: string | string[]
@@ -591,13 +729,42 @@ const quizSubmitted = ref(false)
 const submitLoading = ref(false)
 const quizDebug = ref('')
 const currentQIndex = ref(0)
-const selectedAnswer = ref('')
+// 当前题已选中的选项 key（单选/多选统一用数组）
+const selectedAnswers = ref<string[]>([])
+// 当前填空/问答题的文本答案
+const textAnswer = ref('')
 const quizStartTime = ref(0)
 const quizTimeSpent = ref('')
 const showQuizAnalysis = ref(false)
 const showQuizList = ref(true)
 const quizBatchScores = ref<(SubmitAnswerResult[])[]>([])
 const historyDialogBatchIdx = ref<number | null>(null)
+const historyDetailRecord = ref<SubmitAnswerResult | null>(null)
+
+function openHistoryDetail(record: SubmitAnswerResult): void {
+  historyDetailRecord.value = record
+}
+
+// 历史详情弹窗中的题目列表：用当前题库补全旧记录缺失的 content/options/type/analysis
+const historyDetailItems = computed(() => {
+  if (!historyDetailRecord.value?.items) return []
+  return historyDetailRecord.value.items.map((item) => {
+    const q = allQuizQuestions.value.find((qq) => qq.id === item.questionId) as any
+    return {
+      ...item,
+      content: item.content || q?.content || `题目 ${item.questionId}`,
+      options: item.options || q?.options || '',
+      type: item.type || q?.type || 'single',
+      analysis: item.analysis || q?.analysis || '',
+    }
+  })
+})
+
+// 判断当前查看的历史记录是否为旧数据（未保存每道题的作答详情）
+const isHistoryDetailLegacy = computed(() => {
+  if (!historyDetailRecord.value?.items) return true
+  return historyDetailRecord.value.items.some((item) => !item.content && !item.userAnswer)
+})
 
 // 知识点测试记录持久化
 const KP_QUIZ_KEY_PREFIX = 'kp_quiz_scores_'
@@ -770,6 +937,14 @@ const userId = computed(() => {
 
 const currentQ = computed(() => questions.value[currentQIndex.value] || null)
 
+const canGoNext = computed(() => {
+  if (!currentQ.value) return false
+  if (isQuizChoiceType(currentQ.value.type)) {
+    return selectedAnswers.value.length > 0
+  }
+  return textAnswer.value.trim().length > 0
+})
+
 const quizProgress = computed(() =>
   ((currentQIndex.value + 1) / (questions.value.length || 1)) * 100
 )
@@ -797,35 +972,125 @@ const quizReviewItems = computed(() => {
       content: q?.content || `题目 ${item.questionId}`,
       options: q?.options || '',
       userAnswer: userAnswers.value[item.questionId] || '',
+      type: q?.type || 'single',
+      analysis: item.analysis || q?.analysis || '',
     }
   })
 })
 
+// 把答案 key（如 "AB"）翻译为 "A.xxx; B.xxx" 形式，便于学生阅读
+function formatAnswerWithOptions(answer: string, optionsRaw: string, fallback: string): string {
+  if (!answer || !answer.trim()) return fallback
+  if (!optionsRaw || !optionsRaw.trim()) return answer
+  const keys = answer.trim().split(/[,，\s]+/).filter(Boolean)
+  // 兼容紧凑写法 'AB' / 'ACD'
+  let normalizedKeys: string[] = keys
+  if (keys.length === 1 && keys[0]!.length > 1) {
+    normalizedKeys = keys[0]!.split('').filter((c) => /[A-Z]/.test(c))
+  }
+  const opts = parseOptions(optionsRaw)
+  if (opts.length === 0) return answer
+  const labels: string[] = []
+  for (const k of normalizedKeys) {
+    const opt = opts.find((o) => o.key === k)
+    if (opt) labels.push(`${opt.key}. ${opt.text}`)
+  }
+  return labels.length > 0 ? labels.join('；') : answer
+}
+
+function getUserAnswerDisplay(item: any): string {
+  if (!item.userAnswer || !item.userAnswer.trim()) return '未作答'
+  if (isQuizChoiceType(item.type)) {
+    return formatAnswerWithOptions(item.userAnswer, item.options, item.userAnswer)
+  }
+  return item.userAnswer
+}
+
+function getCorrectAnswerDisplay(item: any): string {
+  if (!item.correctAnswer || !item.correctAnswer.trim()) return '暂无'
+  if (isQuizChoiceType(item.type)) {
+    return formatAnswerWithOptions(item.correctAnswer, item.options, item.correctAnswer)
+  }
+  return item.correctAnswer
+}
+
+function getAnalysisDisplay(item: any): string {
+  // 优先取 quizReviewItems 已合并的 analysis；若为空则尝试从 question 上取
+  const a = (item.analysis || '').trim()
+  if (a) return a
+  const q = questions.value.find((qq) => qq.id === item.questionId) as any
+  return (q?.analysis || '').trim() || '暂无'
+}
+
+// 判断某选项 key 是否包含在答案字符串中（支持 'A' / 'AB' / 'A,B' / 'A,B,C' 等）
+function isAnswerKeyIncluded(answer: string | undefined, key: string): boolean {
+  if (!answer || !key) return false
+  const raw = answer.trim()
+  const keys = raw.split(/[,，\s]+/).filter(Boolean)
+  // 兼容紧凑写法 'AB' / 'ACD'：拆不出单个 key 时，按字符逐个匹配
+  if (keys.length === 1 && keys[0]!.length > 1) {
+    return keys[0]!.includes(key)
+  }
+  return keys.includes(key)
+}
+
+// 把选项 key 数组规范化为排序后的字符串（'AB' / 'ACD'）
+function normalizeAnswerKeys(keys: string[]): string {
+  return [...keys].sort().join('')
+}
+
 function selectQuizOption(key: string) {
-  selectedAnswer.value = key
+  const type = currentQ.value?.type
+  if (type === 'single' || type === 'judge') {
+    selectedAnswers.value = [key]
+  } else {
+    const idx = selectedAnswers.value.indexOf(key)
+    if (idx > -1) {
+      selectedAnswers.value.splice(idx, 1)
+    } else {
+      selectedAnswers.value.push(key)
+    }
+  }
+}
+
+function saveCurrentQuizAnswer() {
+  const q = currentQ.value
+  if (!q) return
+  if (isQuizChoiceType(q.type)) {
+    userAnswers.value[q.id] = normalizeAnswerKeys(selectedAnswers.value)
+  } else {
+    userAnswers.value[q.id] = textAnswer.value.trim()
+  }
+}
+
+function restoreQuizAnswer(q?: (typeof questions.value)[number]) {
+  if (!q) {
+    selectedAnswers.value = []
+    textAnswer.value = ''
+    return
+  }
+  if (isQuizChoiceType(q.type)) {
+    selectedAnswers.value = (userAnswers.value[q.id] || '').split('').filter((c) => /[A-Z]/.test(c))
+    textAnswer.value = ''
+  } else {
+    selectedAnswers.value = []
+    textAnswer.value = userAnswers.value[q.id] || ''
+  }
 }
 
 function handleQuizPrev() {
   if (currentQIndex.value > 0) {
-    const currentQ = questions.value[currentQIndex.value]
-    const prevQ = questions.value[currentQIndex.value - 1]
-    if (currentQ) {
-      userAnswers.value[currentQ.id] = selectedAnswer.value
-    }
+    saveCurrentQuizAnswer()
     currentQIndex.value--
-    selectedAnswer.value = prevQ ? (userAnswers.value[prevQ.id] || '') : ''
+    restoreQuizAnswer(questions.value[currentQIndex.value])
   }
 }
 
 function handleQuizNext() {
   if (currentQIndex.value < questions.value.length - 1) {
-    const currentQ = questions.value[currentQIndex.value]
-    const nextQ = questions.value[currentQIndex.value + 1]
-    if (currentQ) {
-      userAnswers.value[currentQ.id] = selectedAnswer.value
-    }
+    saveCurrentQuizAnswer()
     currentQIndex.value++
-    selectedAnswer.value = nextQ ? (userAnswers.value[nextQ.id] || '') : ''
+    restoreQuizAnswer(questions.value[currentQIndex.value])
   }
 }
 
@@ -839,8 +1104,10 @@ function countAllKps(kps: KnowledgePointTreeNode[]): number {
 
 // 从 AnswerDetail 转换为 AssessmentQuestion
 function convertToAssessmentQuestion(q: AnswerDetail, idx: number): AssessmentQuestion {
-  let type: 'single' | 'multiple' = 'single'
+  let type: AssessmentQuestion['type'] = 'single'
   if (q.type === 'multiple') type = 'multiple'
+  else if (q.type === 'fill') type = 'fill'
+  else if (q.type === 'qa') type = 'qa'
 
   let options: { key: string; text: string }[] = []
   const raw = q.options
@@ -891,6 +1158,14 @@ function collectChapterQuestions(st: SubTopicVO): AssessmentQuestion[] {
   for (const kp of st.knowledgePoints) {
     allRaw.push(...collectQuestionsFromKp(kp))
   }
+
+  // 合并统一 mock 题库中该课程的题目（教师在题目管理页新增的题），
+  // 按 id 去重，避免与章节结构内置题目重复。
+  const mockExtra = getMockQuestions(courseId.value).filter(
+    (q) => !allRaw.some((r) => r.id === q.id),
+  )
+  allRaw.push(...mockExtra as unknown as AnswerDetail[])
+
   if (allRaw.length === 0) return []
 
   // Fisher-Yates 洗牌
@@ -907,6 +1182,17 @@ function collectChapterQuestions(st: SubTopicVO): AssessmentQuestion[] {
     .filter(q => q.options.length > 0 || q.correctAnswer)
 }
 
+function selectFirstChapterForAssessment() {
+  const first = subTopics.value[0]
+  if (!first) return
+  // 展开所有章节并选中第一个
+  expandedChapters.value.add(first.id)
+  selectedSubTopic.value = first
+  selectedKp.value = null
+  selectedKpId.value = ''
+  chapterAssessmentQuestions.value = collectChapterQuestions(first)
+  chapterActiveTab.value = 'assessment'
+}
 function toggleChapter(id: string) {
   if (expandedChapters.value.has(id)) {
     expandedChapters.value.delete(id)
@@ -950,6 +1236,31 @@ function parseOptions(raw: string) {
     key: String.fromCharCode(65 + i),
     text: text.replace(/^[A-Z][.、．)）\s]+/, '').trim(),
   }))
+}
+
+function questionTypeLabel(type?: string) {
+  if (type === 'single') return '单选题'
+  if (type === 'multiple') return '多选题'
+  if (type === 'judge') return '判断题'
+  if (type === 'fill') return '填空题'
+  if (type === 'qa') return '问答题'
+  return '其他题'
+}
+
+function isQuizChoiceType(type?: string) {
+  return type === 'single' || type === 'multiple' || type === 'judge'
+}
+
+function normalizeText(s: string) {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+/** 填空题判分：按 | 拆分逐空比较，忽略大小写与空白差异 */
+function isQuizFillCorrect(userAnswer: string, correctAnswer: string): boolean {
+  if (!correctAnswer) return false
+  const user = userAnswer.split('|').map(normalizeText)
+  const correct = correctAnswer.split('|').map(normalizeText)
+  return user.length === correct.length && user.every((v, i) => v === correct[i])
 }
 
 function formatDuration(seconds: number | string | null): string {
@@ -1115,29 +1426,51 @@ async function fetchQuestionsForKp() {
   quizDebug.value = ''
   userAnswers.value = {}
   currentQIndex.value = 0
-  selectedAnswer.value = ''
+  selectedAnswers.value = []
   showQuizAnalysis.value = false
   quizStartTime.value = Date.now()
   currentQuizBatch.value = 0
 
-  // 优先使用 mock 数据中已有的 questions
-  let loaded: QuestionItem[] = []
-  if (selectedKp.value?.questions && selectedKp.value.questions.length > 0) {
-    loaded = selectedKp.value.questions as QuestionItem[]
-  } else {
-    // fallback: API 调用
+  // 合并两个来源：章节结构内置题 + 统一 mock 题库中教师新增的题
+  const builtIn = selectedKp.value?.questions ? [...selectedKp.value.questions] : []
+
+  // fallback: API 调用（真实后端就绪后启用）
+  let apiQuestions: QuestionItem[] = []
+  if (builtIn.length === 0) {
     try {
-      loaded = await getQuestions(courseId.value, userId.value, selectedKpId.value)
+      apiQuestions = await getQuestions(courseId.value, userId.value, selectedKpId.value)
     } catch (err: any) {
-      loaded = []
+      apiQuestions = []
       const msg = err?.message || err?.response?.data?.msg || '加载试题失败'
       ElMessage.error(msg)
     }
   }
 
-  // 筛掉没有选项的题（用 parseOptions 实际解析结果判断）
-  loaded = loaded.filter(q => parseOptions(q.options || '').length > 0)
-  allQuizQuestions.value = loaded
+  // 统一题库中该课程、该知识点下教师新增的题（含 answer / analysis，供客户端判分）
+  const mockExtra = getMockQuestions(courseId.value, selectedKpId.value).filter(
+    (q) => !builtIn.some((r: any) => r.id === q.id) && !apiQuestions.some((r) => r.id === q.id),
+  )
+
+  const merged: any[] = [
+    ...builtIn,
+    ...apiQuestions,
+    ...mockExtra.map((q) => ({
+      id: q.id,
+      type: q.type,
+      content: q.content,
+      options: q.options,
+      answer: q.answer || '',
+      analysis: q.analysis || '',
+      knowledgePointId: q.knowledgePointId || selectedKpId.value,
+    })),
+  ]
+
+  // 过滤无效题目：选择题必须有可解析的选项；填空/问答题不依赖 options
+  const loaded = merged.filter((q) => {
+    if (q.type === 'fill' || q.type === 'qa') return true
+    return parseOptions(q.options || '').length > 0
+  })
+  allQuizQuestions.value = loaded as QuestionItem[]
   quizBatches.value = splitQuizIntoBatches(loaded)
   totalQuizBatches.value = quizBatches.value.length
   quizBatchScores.value = new Array(quizBatches.value.length).fill(null).map(() => [])
@@ -1176,7 +1509,8 @@ function startQuizBatch(idx: number) {
   quizDebug.value = ''
   userAnswers.value = {}
   currentQIndex.value = 0
-  selectedAnswer.value = ''
+  selectedAnswers.value = []
+  textAnswer.value = ''
   showQuizAnalysis.value = false
   quizStartTime.value = Date.now()
 }
@@ -1187,7 +1521,8 @@ function goToQuizList() {
   quizSubmitted.value = false
   quizScore.value = null
   currentQIndex.value = 0
-  selectedAnswer.value = ''
+  selectedAnswers.value = []
+  textAnswer.value = ''
   showQuizAnalysis.value = false
 }
 
@@ -1195,9 +1530,7 @@ async function submitQuiz() {
   if (!selectedKp.value || submitLoading.value) return
 
   // 保存最后一题答案
-  if (currentQ.value) {
-    userAnswers.value[currentQ.value.id] = selectedAnswer.value
-  }
+  saveCurrentQuizAnswer()
 
   submitLoading.value = true
 
@@ -1208,13 +1541,31 @@ async function submitQuiz() {
     let correctCount = 0
     for (const q of questions.value) {
       const qq = q as any
-      const isCorrect = userAnswers.value[q.id] === qq.answer
+      const type = qq.type
+      const userAns = (userAnswers.value[q.id] || '').trim()
+      const correctAns = String(qq.answer || '').trim()
+      let isCorrect = false
+      if (type === 'fill') {
+        isCorrect = isQuizFillCorrect(userAns, correctAns)
+      } else if (type === 'qa') {
+        // 问答题为开放性题目：有内容即算作答，不强制与参考答案完全一致
+        isCorrect = userAns.length > 0
+      } else {
+        // 单选/多选/判断
+        const u = normalizeAnswerKeys(userAns.split('').filter((c) => /[A-Z]/.test(c)))
+        const c = normalizeAnswerKeys(correctAns.split('').filter((x) => /[A-Z]/.test(x)))
+        isCorrect = u === c
+      }
       if (isCorrect) correctCount++
       results.push({
         questionId: q.id,
         isCorrect,
         correctAnswer: qq.answer || '',
         analysis: qq.analysis || '',
+        userAnswer: userAns,
+        content: qq.content || '',
+        options: qq.options || '',
+        type: type || 'single',
       })
     }
     quizScore.value = { totalQuestions: questions.value.length, correctCount, items: results }
@@ -1253,7 +1604,21 @@ async function submitQuiz() {
 
     quizDebug.value = ''
     await nextTick()
-    quizScore.value = result
+    // 补全每道题的作答与题目元数据，便于历史记录详情展示
+    const questionMap = new Map(questions.value.map((q) => [q.id, q as any]))
+    quizScore.value = {
+      ...result,
+      items: result.items.map((item) => {
+        const q = questionMap.get(item.questionId)
+        return {
+          ...item,
+          userAnswer: userAnswers.value[item.questionId] || '',
+          content: q?.content || '',
+          options: q?.options || '',
+          type: q?.type || 'single',
+        }
+      }),
+    }
     quizSubmitted.value = true
     const elapsed = Date.now() - quizStartTime.value
     const sec = Math.floor(elapsed / 1000)
@@ -1278,7 +1643,8 @@ function restartQuiz() {
   quizDebug.value = ''
   userAnswers.value = {}
   currentQIndex.value = 0
-  selectedAnswer.value = ''
+  selectedAnswers.value = []
+  textAnswer.value = ''
   showQuizAnalysis.value = false
   if (quizBatches.value[currentQuizBatch.value]) {
     questions.value = quizBatches.value[currentQuizBatch.value]
@@ -1507,6 +1873,11 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   color: #909399;
+  gap: 16px;
+}
+
+.start-assessment-btn {
+  margin-top: 8px;
 }
 
 .kp-header {
@@ -1741,6 +2112,57 @@ onMounted(async () => {
   color: #67c23a;
   font-weight: 600;
 }
+.history-item-clickable {
+  cursor: pointer;
+  transition: background-color 0.2s;
+  padding: 10px 12px;
+  margin: 0 -12px;
+  border-radius: 6px;
+}
+.history-item-clickable:hover {
+  background-color: #f5f7fa;
+}
+.history-chevron {
+  margin-left: auto;
+  color: #c0c4cc;
+}
+
+/* 历史记录详情 */
+.history-detail-summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+.history-detail-score {
+  color: #606266;
+}
+.history-detail-pct {
+  color: #409eff;
+  font-weight: 600;
+}
+.history-detail-val {
+  color: #67c23a;
+  font-weight: 600;
+}
+.history-detail-empty {
+  padding: 24px;
+  text-align: center;
+  color: #909399;
+  font-size: 14px;
+}
+.history-detail-section {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+.history-detail-legacy-alert {
+  margin-bottom: 16px;
+}
 
 /* 返回链接 */
 .quiz-back-link {
@@ -1860,6 +2282,58 @@ onMounted(async () => {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+/* 填空/问答题作答区 */
+.quiz-text-answer-area {
+  margin-bottom: 24px;
+}
+
+.quiz-text-answer-label {
+  font-size: 14px;
+  color: #606266;
+  margin-bottom: 10px;
+}
+
+/* 解析区共用样式：所有题型的"你的答案 / 正确答案"灰色框 */
+.quiz-text-analysis {
+  background: #f5f7fa;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.quiz-text-analysis-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.quiz-text-analysis-label {
+  color: #909399;
+  white-space: nowrap;
+}
+
+.quiz-text-analysis-value {
+  word-break: break-all;
+}
+
+.text-correct {
+  color: #67c23a;
+  font-weight: 500;
+}
+
+.text-wrong {
+  color: #f56c6c;
+  font-weight: 500;
+}
+
+.quiz-text-analysis-tip {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #e6a23c;
 }
 
 /* 测试结果样式 */
@@ -2062,13 +2536,25 @@ onMounted(async () => {
 
 .quiz-analysis-explanation {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  padding: 12px;
+  padding: 14px 16px;
   background: #f5f7fa;
-  border-radius: 4px;
+  border-radius: 8px;
   font-size: 14px;
   color: #606266;
+  line-height: 1.7;
+}
+
+.quiz-analysis-explanation-label {
+  color: #909399;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.quiz-analysis-explanation-text {
+  word-break: break-all;
+  white-space: pre-wrap;
 }
 
 /* 视频播放器对话框样式 */

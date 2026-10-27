@@ -7,11 +7,7 @@
         <div class="header-left">
           <router-link to="/dashboard" class="logo-wrap">
             <div class="logo-icon">
-              <svg viewBox="0 0 24 24" fill="none" class="logo-svg">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" fill="currentColor" opacity="0.6"/>
-                <path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                <path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" fill="none"/>
-              </svg>
+              <img src="@/assets/logo.png" alt="logo" class="logo-svg" />
             </div>
             <span class="logo-text">高校个性化在线学习系统</span>
           </router-link>
@@ -339,7 +335,8 @@ const currentCourseId = computed(() => userStore.currentCourseId)
 
 const currentCourseName = computed(() => {
   const course = courseStore.getCurrentCourse()
-  return course?.name ?? '选择课程'
+  // 无当前选择的课程时不显示课程名（保持空白），符合“没有就什么都不显示”的预期
+  return course?.name ?? ''
 })
 
 const userInitial = computed(() => {
@@ -545,15 +542,13 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1890ff, #1677cc);
-  border-radius: 8px;
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(24,144,255,0.3);
 }
 
 .logo-svg {
-  width: 18px;
-  height: 18px;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  object-fit: cover;
 }
 
 .logo-text {

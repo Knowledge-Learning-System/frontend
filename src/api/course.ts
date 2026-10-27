@@ -2,10 +2,10 @@ import request from './request'
 import { mockGetAllCourses, mockGetMyCourses, mockEnrollCourse, mockSwitchCourse, mockUnenrollCourse } from './mock-course'
 import type { Course, MyCourse } from '@/types/course'
 
-// 使用 Mock 数据（开发环境）
+// 使用真实后端接口（不再使用 Mock 假数据，保证显示当前用户实际选择的课程）
 const USE_MOCK = false
 
-export const getCourses = async () => {
+export const getCourses = async (): Promise<Course[]> => {
   if (USE_MOCK) {
     const res = await mockGetAllCourses()
     return res.courses
@@ -13,10 +13,10 @@ export const getCourses = async () => {
   return request.get<Course[], Course[]>('/courses')
 }
 
-export const getMyCourses = async () => {
+export const getMyCourses = async (): Promise<MyCourse[]> => {
   if (USE_MOCK) {
     const res = await mockGetMyCourses()
-    return res.courses
+    return res.courses as MyCourse[]
   }
   return request.get<MyCourse[], MyCourse[]>('/courses/my')
 }

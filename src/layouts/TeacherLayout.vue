@@ -4,11 +4,7 @@
     <aside class="teacher-sidebar" :class="{ collapsed: sidebarCollapsed }">
       <div class="sidebar-header">
         <router-link to="/teacher" class="sidebar-logo">
-          <svg viewBox="0 0 24 24" fill="none" class="logo-icon">
-            <path d="M12 2L2 7l10 5 10-5-10-5z" fill="currentColor" opacity="0.6"/>
-            <path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="1.5" fill="none"/>
-            <path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" fill="none"/>
-          </svg>
+          <img src="@/assets/logo.png" alt="logo" class="logo-icon" />
           <span v-show="!sidebarCollapsed" class="logo-text">教师管理面板</span>
         </router-link>
       </div>
@@ -42,6 +38,10 @@
         <el-menu-item index="/teacher/questions">
           <el-icon><Edit /></el-icon>
           <template #title>题目管理</template>
+        </el-menu-item>
+        <el-menu-item index="/teacher/graph">
+          <el-icon><Connection /></el-icon>
+          <template #title>图谱管理</template>
         </el-menu-item>
       </el-menu>
 
@@ -96,6 +96,7 @@ import {
   User,
   Document,
   Edit,
+  Connection,
   Fold,
   Expand,
 } from '@element-plus/icons-vue'
@@ -114,6 +115,7 @@ const pageTitleMap: Record<string, string> = {
   '/teacher/students': '学生管理',
   '/teacher/homework': '作业管理',
   '/teacher/questions': '题目管理',
+  '/teacher/graph': '图谱管理',
 }
 
 const currentPageTitle = computed(() => pageTitleMap[route.path] || '教师端')
@@ -162,7 +164,8 @@ function handleLogout() {
 .logo-icon {
   width: 28px;
   height: 28px;
-  color: #409eff;
+  border-radius: 6px;
+  object-fit: cover;
   flex-shrink: 0;
 }
 

@@ -37,6 +37,11 @@ const router = createRouter({
           component: () => import('@/views/RadarChart.vue'),
         },
         {
+          path: 'statistics',
+          name: 'MyStatistics',
+          component: () => import('@/views/MyStatistics.vue'),
+        },
+        {
           path: 'weak-points',
           name: 'WeakPoints',
           component: () => import('@/views/WeakPoints.vue'),
@@ -104,6 +109,11 @@ const router = createRouter({
           component: () => import('@/views/teacher/TeacherCourseHall.vue'),
         },
         {
+          path: 'graph',
+          name: 'TeacherGraphManage',
+          component: () => import('@/views/teacher/TeacherGraphManage.vue'),
+        },
+        {
           path: 'knowledge/:courseId/:kpId',
           name: 'TeacherKnowledgePointDetail',
           component: () => import('@/views/teacher/TeacherKnowledgePointDetail.vue'),
@@ -135,6 +145,18 @@ const router = createRouter({
         },
       ],
     },
+    {
+      path: '/admin',
+      component: () => import('@/layouts/AdminLayout.vue'),
+      redirect: '/admin/teachers',
+      children: [
+        {
+          path: 'teachers',
+          name: 'AdminTeacherCourses',
+          component: () => import('@/views/admin/AdminTeacherCourses.vue'),
+        },
+      ],
+    },
   ],
 })
 
@@ -144,7 +166,9 @@ router.beforeEach(async (to) => {
   if (to.meta.public) {
     if (userStore.isLoggedIn && (to.path === '/login' || to.path === '/register')) {
       const role = userStore.userInfo?.role
-      return role === 'teacher' ? '/teacher/hall' : '/dashboard'
+      if (role === 'teacher') return '/teacher/hall'
+      if (role === 'admin') return '/admin/teachers'
+      return '/dashboard'
     }
     return true
   }
@@ -164,14 +188,19 @@ router.beforeEach(async (to) => {
 
   const role = userStore.userInfo?.role
 
-  // 学生访问教师端 → 重定向回学生端首页
-  if (to.path.startsWith('/teacher') && role !== 'teacher') {
+  // 学生访问教师端/管理员端 → 重定向回学生端首页
+  if ((to.path.startsWith('/teacher') || to.path.startsWith('/admin')) && role !== 'teacher' && role !== 'admin') {
     return '/dashboard'
   }
 
   // 教师访问任何非教师端页面 → 锁死在教师端
   if (role === 'teacher' && !to.path.startsWith('/teacher')) {
     return '/teacher/hall'
+  }
+
+  // 管理员访问任何非管理员端页面 → 锁死在管理员端
+  if (role === 'admin' && !to.path.startsWith('/admin')) {
+    return '/admin/teachers'
   }
 
   return true

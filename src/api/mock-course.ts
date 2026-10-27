@@ -1,11 +1,11 @@
 // Mock 课程数据
-import type { Course, CourseListResponse } from '@/types/course'
+import type { Course, MyCourse, CourseListResponse } from '@/types/course'
 
 // 模拟延迟
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 // 模拟课程数据
-const mockAllCourses: Course[] = [
+const mockAllCourses: MyCourse[] = [
   {
     id: 1,
     name: '软件工程',
@@ -13,6 +13,7 @@ const mockAllCourses: Course[] = [
     instructor: '王教授',
     progress: 35,
     cover: '',
+    status: 1,
   },
   {
     id: 2,
@@ -21,6 +22,7 @@ const mockAllCourses: Course[] = [
     instructor: '李教授',
     progress: 20,
     cover: '',
+    status: 1,
   },
   {
     id: 3,
@@ -29,6 +31,7 @@ const mockAllCourses: Course[] = [
     instructor: '刘教授',
     progress: 0,
     cover: '',
+    status: 1,
   },
   {
     id: 4,
@@ -37,6 +40,7 @@ const mockAllCourses: Course[] = [
     instructor: '张教授',
     progress: 0,
     cover: '',
+    status: 1,
   },
   {
     id: 5,
@@ -45,6 +49,7 @@ const mockAllCourses: Course[] = [
     instructor: '赵教授',
     progress: 0,
     cover: '',
+    status: 1,
   },
   {
     id: 6,
@@ -53,6 +58,7 @@ const mockAllCourses: Course[] = [
     instructor: '陈教授',
     progress: 0,
     cover: '',
+    status: 1,
   },
   {
     id: 7,
@@ -61,10 +67,20 @@ const mockAllCourses: Course[] = [
     instructor: '周教授',
     progress: 0,
     cover: '',
+    status: 1,
+  },
+  {
+    id: 8,
+    name: '大模型与智能体开发',
+    description: '本课程系统讲解大语言模型基础、提示工程、RAG检索增强生成、智能体(Agent)架构与多智能体协作，配套实践项目，帮助学员掌握大模型应用开发全流程。',
+    instructor: 'teacher2',
+    progress: 0,
+    cover: '',
+    status: 1,
   },
 ]
 
-const mockMyCourses: Course[] = [
+const mockMyCourses: MyCourse[] = [
   {
     id: 1,
     name: '软件工程',
@@ -72,6 +88,7 @@ const mockMyCourses: Course[] = [
     instructor: '王教授',
     progress: 35,
     cover: '',
+    status: 1,
   },
 ]
 
@@ -100,12 +117,12 @@ export const mockEnrollCourse = async (courseId: number): Promise<void> => {
   if (!course) {
     throw new Error('课程不存在')
   }
-  
+
   // 检查是否已选
   if (mockMyCourses.some(c => c.id === courseId)) {
     throw new Error('已选过该课程')
   }
-  
+
   mockMyCourses.push({ ...course, progress: 0 })
 }
 

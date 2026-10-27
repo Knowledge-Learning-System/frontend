@@ -25,17 +25,18 @@
     <div class="assessment-content" v-if="!showResult && currentQuestion">
       <div class="question-card">
         <div class="question-type-badge">
-          <el-tag 
-            :type="currentQuestion.type === 'single' ? 'primary' : 'warning'" 
+          <el-tag
+            :type="questionTagType(currentQuestion.type)"
             size="small"
           >
-            {{ currentQuestion.type === 'single' ? '单选题' : '多选题' }}
+            {{ questionTypeLabel(currentQuestion.type) }}
           </el-tag>
         </div>
-        
+
         <h2 class="question-text">{{ currentQuestion.text }}</h2>
-        
-        <div class="options-list">
+
+        <!-- 选择题选项 -->
+        <div class="options-list" v-if="isChoiceType(currentQuestion.type)">
           <div
             v-for="option in currentQuestion.options"
             :key="option.key"
@@ -60,26 +61,50 @@
           </div>
         </div>
 
+        <!-- 填空题输入 -->
+        <div v-else-if="currentQuestion.type === 'fill'" class="text-answer-area">
+          <div class="text-answer-label">请输入答案：</div>
+          <el-input
+            v-model="textAnswer"
+            placeholder="请填写空缺处的内容"
+            size="large"
+            clearable
+          />
+        </div>
+
+        <!-- 问答 / 编程题多行输入 -->
+        <div v-else-if="currentQuestion.type === 'qa'" class="text-answer-area">
+          <div class="text-answer-label">请输入你的回答（支持多行代码）：</div>
+          <el-input
+            v-model="textAnswer"
+            type="textarea"
+            :rows="8"
+            resize="vertical"
+            placeholder="请在此输入答案或代码…"
+            class="code-textarea"
+          />
+        </div>
+
         <div class="question-actions">
-          <el-button 
-            v-if="currentQuestionIndex > 0" 
+          <el-button
+            v-if="currentQuestionIndex > 0"
             @click="handlePrevious"
           >
             上一题
           </el-button>
-          <el-button 
+          <el-button
             v-if="currentQuestionIndex < questions.length - 1"
-            type="primary" 
+            type="primary"
             @click="handleNext"
-            :disabled="selectedAnswers.length === 0"
+            :disabled="!canAnswer"
           >
             下一题
           </el-button>
-          <el-button 
+          <el-button
             v-if="currentQuestionIndex === questions.length - 1"
-            type="success" 
+            type="success"
             @click="handleSubmit"
-            :disabled="selectedAnswers.length === 0"
+            :disabled="!canAnswer"
             :loading="submitting"
           >
             提交答案
@@ -132,7 +157,7 @@
             </div>
             <div class="info-item">
               <span class="info-label">答题数</span>
-              <span class="info-value">{{ correctCount }}/{{ questions.length }}</span>
+              <span class="info-value">{{ correctCount }}/{{ objectiveTotal }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">用时</span>
@@ -150,14 +175,10 @@
       <!-- 错题解析 -->
       <div v-if="showAnalysis" class="analysis-section">
         <h3 class="analysis-title">错题解析</h3>
-        <div 
-          v-for="(question, idx) in wrongQuestions" 
-          :key="idx"
-          class="analysis-card"
-        >
+        <div v-for="(question, idx) in wrongQuestions" :key="idx" class="analysis-card">
           <div class="analysis-question-header">
             <span class="analysis-question-type">
-              {{ question.type === 'single' ? '单选题' : '多选题' }}
+              {{ questionTypeLabel(question.type) }}
             </span>
             <span class="analysis-question-text">第 {{ idx + 1 }} 题</span>
           </div>
@@ -169,6 +190,39 @@
             </div>
             <div class="result-row">
               <span class="result-label">正确答案：</span>
+              <span class="result-value correct">{{ formatAnswer(question, question.correctAnswer) }}</span>
+            </div>
+          </div>
+          <div class="analysis-explanation">
+            <div class="explanation-label">
+              <el-icon><Document /></el-icon>
+              解析：
+            </div>
+            <p class="explanation-content">{{ question.explanation }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 主观题（问答/编程）：无法自动判分，展示参考答案 -->
+      <div v-if="subjectiveQuestions.length" class="analysis-section subjective-section">
+        <h3 class="analysis-title">主观题（待教师评分）</h3>
+        <div
+          v-for="(question, idx) in subjectiveQuestions"
+          :key="'s' + idx"
+          class="analysis-card"
+        >
+          <div class="analysis-question-header">
+            <span class="analysis-question-type">{{ questionTypeLabel(question.type) }}</span>
+            <span class="analysis-question-text">第 {{ idx + 1 }} 题</span>
+          </div>
+          <p class="analysis-question-text-full">{{ question.text }}</p>
+          <div class="analysis-result">
+            <div class="result-row">
+              <span class="result-label">你的答案：</span>
+              <span class="result-value">{{ formatAnswer(question, question.userAnswer || '未作答') }}</span>
+            </div>
+            <div class="result-row">
+              <span class="result-label">参考答案：</span>
               <span class="result-value correct">{{ formatAnswer(question, question.correctAnswer) }}</span>
             </div>
           </div>
@@ -230,26 +284,29 @@
           v-for="(q, idx) in viewingRecord.questions"
           :key="idx"
           class="detail-question-item"
-          :class="{ 'detail-correct': isRecordQuestionCorrect(viewingRecord, idx), 'detail-wrong': !isRecordQuestionCorrect(viewingRecord, idx) }"
+          :class="{
+            'detail-correct': recordQuestionStatus(q) === 'correct',
+            'detail-wrong': recordQuestionStatus(q) === 'wrong',
+          }"
         >
           <div class="detail-q-header">
             <span class="detail-q-num">{{ idx + 1 }}.</span>
-            <el-tag :type="q.type === 'single' ? 'primary' : 'warning'" size="small">
-              {{ q.type === 'single' ? '单选' : '多选' }}
+            <el-tag :type="questionTagType(q.type)" size="small">
+              {{ questionTypeLabel(q.type) }}
             </el-tag>
-            <el-tag :type="isRecordQuestionCorrect(viewingRecord, idx) ? 'success' : 'danger'" size="small">
-              {{ isRecordQuestionCorrect(viewingRecord, idx) ? '正确' : '错误' }}
+            <el-tag :type="recordQuestionStatus(q) === 'correct' ? 'success' : recordQuestionStatus(q) === 'pending' ? 'info' : 'danger'" size="small">
+              {{ recordQuestionStatus(q) === 'correct' ? '正确' : recordQuestionStatus(q) === 'pending' ? '待评分' : '错误' }}
             </el-tag>
           </div>
           <p class="detail-q-text">{{ q.text }}</p>
           <div class="detail-result-row">
             <span class="detail-label">你的答案：</span>
-            <span :class="isRecordQuestionCorrect(viewingRecord, idx) ? 'text-correct' : 'text-wrong'">
+            <span :class="recordQuestionStatus(q) === 'correct' ? 'text-correct' : 'text-wrong'">
               {{ formatSnapshotAnswer(q, q.userAnswer!) }}
             </span>
           </div>
-          <div class="detail-result-row" v-if="!isRecordQuestionCorrect(viewingRecord, idx)">
-            <span class="detail-label">正确答案：</span>
+          <div class="detail-result-row" v-if="recordQuestionStatus(q) !== 'correct'">
+            <span class="detail-label">{{ q.type === 'qa' ? '参考答案：' : '正确答案：' }}</span>
             <span class="text-correct">{{ formatSnapshotAnswer(q, q.correctAnswer) }}</span>
           </div>
         </div>
@@ -281,9 +338,11 @@ import { getQuestions, submitAnswers } from '@/api/question'
 import { useCourseStore } from '@/stores/course'
 import { useUserStore } from '@/stores/user'
 
+type QuestionType = 'single' | 'multiple' | 'fill' | 'qa'
+
 interface Question {
   id: string
-  type: 'single' | 'multiple'
+  type: QuestionType
   text: string
   options: { key: string; text: string }[]
   correctAnswer: string | string[]
@@ -307,13 +366,45 @@ interface AssessmentRecord {
 
 interface QuestionSnapshot {
   id: string
-  type: 'single' | 'multiple'
+  type: QuestionType
   text: string
   options: { key: string; text: string }[]
   correctAnswer: string | string[]
   userAnswer?: string | string[]
   explanation: string
   knowledgePointId?: string
+}
+
+// --- 题型工具 ---
+const TYPE_LABELS: Record<string, string> = {
+  single: '单选题',
+  multiple: '多选题',
+  fill: '填空题',
+  qa: '问答题/编程题',
+}
+
+const questionTypeLabel = (t: string) => TYPE_LABELS[t] ?? t
+
+const questionTagType = (t: string) => {
+  if (t === 'single') return 'primary'
+  if (t === 'multiple') return 'warning'
+  if (t === 'fill') return 'success'
+  return 'info'
+}
+
+const isChoiceType = (t: string) => t === 'single' || t === 'multiple'
+
+/** 文本答案归一化：忽略大小写、首尾空格与连续空白 */
+const normalizeText = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ')
+
+/** 填空题判分：按 | 拆分逐空比较 */
+function isFillCorrect(q: Question | QuestionSnapshot): boolean {
+  if (!q.userAnswer) return false
+  const user = Array.isArray(q.userAnswer) ? q.userAnswer.join('|') : q.userAnswer
+  const correct = Array.isArray(q.correctAnswer) ? q.correctAnswer.join('|') : q.correctAnswer
+  const u = user.split('|').map(normalizeText)
+  const c = correct.split('|').map(normalizeText)
+  return u.length === c.length && u.every((v, i) => v === c[i])
 }
 
 // localStorage key 前缀
@@ -347,15 +438,19 @@ function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
-    ;[a[i], a[j]] = [a[j], a[i]]
+    const tmp = a[i] as T
+    a[i] = a[j] as T
+    a[j] = tmp
   }
   return a
 }
 
 /** 格式转换：后端 QuestionItem / 知识图谱数据结构 → Question */
 function convertQuestion(q: any): Question {
-  let type: 'single' | 'multiple' = 'single'
+  let type: QuestionType = 'single'
   if (q.type === 'multiple') type = 'multiple'
+  else if (q.type === 'fill') type = 'fill'
+  else if (q.type === 'qa') type = 'qa'
 
   let options: { key: string; text: string }[] = []
   const raw = typeof q.options === 'string' ? q.options : (q.options ? JSON.stringify(q.options) : '')
@@ -389,6 +484,8 @@ function convertQuestion(q: any): Question {
 
 const currentQuestionIndex = ref(0)
 const selectedAnswers = ref<string[]>([])
+// 填空 / 问答（编程）题的文本答案
+const textAnswer = ref('')
 const showResult = ref(false)
 const showAnalysis = ref(false)
 const showHistory = ref(false)
@@ -404,15 +501,29 @@ const progressPercent = computed(() => {
   return ((currentQuestionIndex.value + 1) / questions.value.length) * 100
 })
 
+/** 客观题总数（问答/编程题为主观题，不参与自动判分） */
+const objectiveTotal = computed(() => questions.value.filter(q => q.type !== 'qa').length)
+
+/** 当前题是否已作答 */
+const canAnswer = computed(() => {
+  const q = currentQuestion.value
+  if (!q) return false
+  if (isChoiceType(q.type)) return selectedAnswers.value.length > 0
+  return textAnswer.value.trim().length > 0
+})
+
 const score = ref(0)
-const totalScore = computed(() => questions.value.length * 3)
+const totalScore = computed(() => objectiveTotal.value * 3)
 const correctCount = ref(0)
 const accuracyRate = computed(() => {
-  return Math.round((correctCount.value / questions.value.length) * 100)
+  if (objectiveTotal.value === 0) return 0
+  return Math.round((correctCount.value / objectiveTotal.value) * 100)
 })
 
 const wrongQuestions = computed(() => {
   return questions.value.filter(q => {
+    if (q.type === 'qa') return false
+    if (q.type === 'fill') return !isFillCorrect(q)
     if (q.type === 'single') {
       return q.userAnswer !== q.correctAnswer
     } else {
@@ -422,6 +533,9 @@ const wrongQuestions = computed(() => {
     }
   })
 })
+
+/** 主观题（问答/编程）：展示作答与参考答案，不自动判分 */
+const subjectiveQuestions = computed(() => questions.value.filter(q => q.type === 'qa'))
 
 const circumference = computed(() => 2 * Math.PI * 45)
 const strokeDashoffset = computed(() => {
@@ -445,35 +559,49 @@ const handleOptionSelect = (key: string) => {
   }
 }
 
+/** 恢复某题已填写的答案到当前作答状态 */
+const restoreAnswer = (question?: Question) => {
+  if (!question) return
+  if (isChoiceType(question.type)) {
+    const userAnswer = question.userAnswer
+    selectedAnswers.value = userAnswer
+      ? (Array.isArray(userAnswer) ? userAnswer : [userAnswer])
+      : []
+    textAnswer.value = ''
+  } else {
+    textAnswer.value = question.userAnswer && !Array.isArray(question.userAnswer)
+      ? question.userAnswer
+      : ''
+    selectedAnswers.value = []
+  }
+}
+
+/** 保存当前题的作答 */
+const saveCurrentAnswer = () => {
+  const question = currentQuestion.value
+  if (!question) return
+  if (isChoiceType(question.type)) {
+    question.userAnswer = question.type === 'single'
+      ? selectedAnswers.value[0]
+      : selectedAnswers.value
+  } else {
+    question.userAnswer = textAnswer.value
+  }
+}
+
 const handlePrevious = () => {
   if (currentQuestionIndex.value > 0) {
+    saveCurrentAnswer()
     currentQuestionIndex.value--
-    const question = questions.value[currentQuestionIndex.value]
-    if (question) {
-      const userAnswer = question.userAnswer
-      selectedAnswers.value = userAnswer 
-        ? (Array.isArray(userAnswer) ? userAnswer : [userAnswer])
-        : []
-    }
+    restoreAnswer(questions.value[currentQuestionIndex.value])
   }
 }
 
 const handleNext = () => {
-  if (currentQuestionIndex.value < questions.value.length - 1 && currentQuestion.value) {
-    const currentQ = questions.value[currentQuestionIndex.value]
-    if (currentQ) {
-      currentQ.userAnswer = currentQuestion.value.type === 'single' 
-        ? selectedAnswers.value[0] 
-        : selectedAnswers.value
-    }
+  if (currentQuestionIndex.value < questions.value.length - 1) {
+    saveCurrentAnswer()
     currentQuestionIndex.value++
-    const question = questions.value[currentQuestionIndex.value]
-    if (question) {
-      const userAnswer = question.userAnswer
-      selectedAnswers.value = userAnswer 
-        ? (Array.isArray(userAnswer) ? userAnswer : [userAnswer])
-        : []
-    }
+    restoreAnswer(questions.value[currentQuestionIndex.value])
   }
 }
 
@@ -481,12 +609,7 @@ const handleSubmit = async () => {
   submitting.value = true
 
   // 保存当前答案
-  const currentQ = questions.value[currentQuestionIndex.value]
-  if (currentQ && currentQuestion.value) {
-    currentQ.userAnswer = currentQuestion.value.type === 'single'
-      ? selectedAnswers.value[0]
-      : selectedAnswers.value
-  }
+  saveCurrentAnswer()
 
   timeSpent.value = formatTimeSpent(Date.now() - startTime.value)
 
@@ -527,6 +650,11 @@ const handleSubmit = async () => {
     // 本地 mock 判分（外部传入题目 / 默认题保留原逻辑）
     let correct = 0
     questions.value.forEach(q => {
+      if (q.type === 'qa') return // 主观题不参与自动判分
+      if (q.type === 'fill') {
+        if (isFillCorrect(q)) correct++
+        return
+      }
       if (q.type === 'single') {
         if (q.userAnswer === q.correctAnswer) correct++
       } else {
@@ -560,6 +688,7 @@ const handleRetry = () => {
   })
   currentQuestionIndex.value = 0
   selectedAnswers.value = []
+  textAnswer.value = ''
   showResult.value = false
   showAnalysis.value = false
   startTime.value = Date.now()
@@ -569,9 +698,12 @@ const handleViewAnalysis = () => {
   showAnalysis.value = true
 }
 
-/** 将答案字母转为 "A. 选项内容" 格式 */
+/** 将答案字母转为 "A. 选项内容" 格式；填空/问答直接展示文本 */
 function formatAnswer(question: Question, answer: string | string[]): string {
   if (!answer) return ''
+  if (!isChoiceType(question.type)) {
+    return Array.isArray(answer) ? answer.join('、') : answer
+  }
   const keys = Array.isArray(answer) ? answer : [answer]
   return keys.map(key => {
     const opt = question.options.find(o => o.key === key)
@@ -579,9 +711,12 @@ function formatAnswer(question: Question, answer: string | string[]): string {
   }).join('，')
 }
 
-/** 将答案字母转为 "A. 选项内容" 格式（快照版） */
+/** 将答案字母转为 "A. 选项内容" 格式（快照版）；填空/问答直接展示文本 */
 function formatSnapshotAnswer(q: QuestionSnapshot, answer: string | string[]): string {
   if (!answer) return '未作答'
+  if (!isChoiceType(q.type)) {
+    return Array.isArray(answer) ? answer.join('、') : answer
+  }
   const keys = Array.isArray(answer) ? answer : [answer]
   return keys.map(key => {
     const opt = q.options.find(o => o.key === key)
@@ -589,14 +724,15 @@ function formatSnapshotAnswer(q: QuestionSnapshot, answer: string | string[]): s
   }).join('，')
 }
 
-/** 判断记录中某题是否答对 */
-function isRecordQuestionCorrect(record: AssessmentRecord, idx: number): boolean {
-  const q = record.questions[idx]
-  if (!q || !q.userAnswer) return false
-  if (q.type === 'single') return q.userAnswer === q.correctAnswer
+/** 记录中某题的判分状态：correct / wrong / pending（主观题待评分） */
+function recordQuestionStatus(q: QuestionSnapshot): 'correct' | 'wrong' | 'pending' {
+  if (q.type === 'qa') return 'pending'
+  if (!q.userAnswer) return 'wrong'
+  if (q.type === 'fill') return isFillCorrect(q) ? 'correct' : 'wrong'
+  if (q.type === 'single') return q.userAnswer === q.correctAnswer ? 'correct' : 'wrong'
   const userAns = Array.isArray(q.userAnswer) ? q.userAnswer : [q.userAnswer]
   const correctAns = Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer]
-  return JSON.stringify(userAns.sort()) === JSON.stringify(correctAns.sort())
+  return JSON.stringify(userAns.sort()) === JSON.stringify(correctAns.sort()) ? 'correct' : 'wrong'
 }
 
 const handleBack = () => {
@@ -702,6 +838,7 @@ watch(
 function resetAssessmentState() {
   currentQuestionIndex.value = 0
   selectedAnswers.value = []
+  textAnswer.value = ''
   showResult.value = false
   showAnalysis.value = false
   startTime.value = Date.now()
@@ -894,6 +1031,27 @@ async function loadQuestionsForNode() {
   display: flex;
   justify-content: center;
   gap: 16px;
+}
+
+/* 填空 / 问答文本作答区 */
+.text-answer-area {
+  margin-bottom: 32px;
+}
+
+.text-answer-label {
+  font-size: 14px;
+  color: #606266;
+  margin-bottom: 10px;
+}
+
+.code-textarea :deep(textarea) {
+  font-family: Consolas, Monaco, 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.subjective-section {
+  margin-top: 24px;
 }
 
 /* 结果页面样式 */

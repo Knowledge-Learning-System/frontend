@@ -13,11 +13,7 @@
         <!-- Logo 和标题 -->
         <div class="login-header">
           <div class="login-logo">
-            <svg viewBox="0 0 24 24" fill="none" class="logo-svg">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" fill="currentColor" opacity="0.6"/>
-              <path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="1.5" fill="none"/>
-              <path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" fill="none"/>
-            </svg>
+            <img src="@/assets/logo.png" alt="logo" class="logo-svg" />
           </div>
           <h1 class="login-title">高校个性化在线学习系统</h1>
           <p class="login-subtitle">融合学科知识图谱与大语言模型的高校个性化在线学习平台</p>
@@ -128,7 +124,13 @@ const handleLogin = async () => {
     })
     ElMessage.success('登录成功')
     const role = userStore.userInfo?.role
-    router.push(role === 'teacher' ? '/teacher/courses' : '/dashboard')
+    if (role === 'teacher') {
+      router.push('/teacher/courses')
+    } else if (role === 'admin') {
+      router.push('/admin/teachers')
+    } else {
+      router.push('/dashboard')
+    }
   } catch {
     ElMessage.error('账号或密码错误')
   } finally {
@@ -208,16 +210,14 @@ const handleLogin = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1890ff, #1677cc);
-  border-radius: 14px;
   margin: 0 auto 16px;
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(24,144,255,0.3);
 }
 
 .logo-svg {
-  width: 26px;
-  height: 26px;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  object-fit: cover;
 }
 
 .login-title {

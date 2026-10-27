@@ -8,11 +8,7 @@
     <div class="register-container">
       <div class="register-header">
         <div class="register-logo">
-          <svg viewBox="0 0 24 24" fill="none" class="logo-svg">
-            <path d="M12 2L2 7l10 5 10-5-10-5z" fill="currentColor" opacity="0.6"/>
-            <path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="1.5" fill="none"/>
-            <path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" fill="none"/>
-          </svg>
+          <img src="@/assets/logo.png" alt="logo" class="logo-svg" />
         </div>
         <h1 class="register-system-name">高校个性化在线学习系统</h1>
       </div>
@@ -108,11 +104,18 @@ const handleRegister = async () => {
 
   loading.value = true
   try {
-    await registerApi({ username: form.username, password: form.password, role: form.role })
+    await registerApi({
+      username: form.username,
+      password: form.password,
+      role: form.role,
+      studentId: form.username,
+      email: `${form.username}@edu.local`,
+    })
     ElMessage.success('注册成功，请登录')
     router.push('/login')
-  } catch {
-    ElMessage.error('注册失败')
+  } catch (err: any) {
+    const msg = err?.response?.data?.msg || err?.message || '注册失败'
+    ElMessage.error(msg)
   } finally {
     loading.value = false
   }
@@ -177,15 +180,13 @@ const handleRegister = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  border-radius: 14px;
-  color: #fff;
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3);
 }
 
 .logo-svg {
-  width: 32px;
-  height: 32px;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  object-fit: cover;
 }
 
 .register-system-name {

@@ -11,3 +11,8 @@ export interface MyCourse extends Course {
   progress: number
   selectedAt?: string
 }
+
+export interface CourseListResponse {
+  courses: Course[]
+  total: number
+}

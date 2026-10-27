@@ -18,8 +18,10 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     proxy: {
+      // 无本地后端时，可指向生产服务器（nginx 反代 8080）用真实数据验证
+      // 本地起后端调试时改回 http://localhost:8080
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'http://47.98.101.99:80',
         changeOrigin: true,
       },
     },

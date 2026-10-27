@@ -12,14 +12,6 @@
     <section class="quick-access-section">
       <h2 class="section-title">学习功能</h2>
       <div class="quick-access-grid">
-        <div class="access-card" @click="router.push('/radar-chart')">
-          <div class="access-icon" style="background: linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%); color: #1890ff;">
-            <el-icon :size="32"><TrendCharts /></el-icon>
-          </div>
-          <h3 class="access-title">掌握度分析</h3>
-          <p class="access-desc">通过雷达图可视化展示各知识点掌握程度</p>
-        </div>
-        
         <div class="access-card" @click="router.push('/weak-points')">
           <div class="access-icon" style="background: linear-gradient(135deg, #fff7e6 0%, #ffe7ba 100%); color: #fa8c16;">
             <el-icon :size="32"><WarningFilled /></el-icon>
@@ -42,6 +34,14 @@
           </div>
           <h3 class="access-title">学习计划</h3>
           <p class="access-desc">按天规划学习路径，循序渐进</p>
+        </div>
+
+        <div class="access-card" @click="router.push('/statistics')">
+          <div class="access-icon" style="background: linear-gradient(135deg, #f9f0ff 0%, #efdbff 100%); color: #9254de;">
+            <el-icon :size="32"><DataAnalysis /></el-icon>
+          </div>
+          <h3 class="access-title">学习统计</h3>
+          <p class="access-desc">环形图、趋势图、柱状图多维展示学习效果</p>
         </div>
       </div>
     </section>
@@ -303,7 +303,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, provide } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ArrowLeft, ArrowRight, Calendar, CircleCheck, CircleCheckFilled, Clock, Document, Plus, Reading, Refresh, StarFilled, TrendCharts, User, VideoPlay, WarningFilled } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, Calendar, CircleCheck, CircleCheckFilled, Clock, DataAnalysis, Document, Plus, Reading, Refresh, StarFilled, TrendCharts, User, VideoPlay, WarningFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useCourseStore } from '@/stores/course'
 import { useUserStore } from '@/stores/user'

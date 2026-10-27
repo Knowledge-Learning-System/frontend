@@ -126,10 +126,24 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import type { KnowledgeNode, KnowledgeLink } from '@/types/knowledgeGraph'
+import {
+  forceSimulation,
+  forceLink,
+  forceManyBody,
+  forceCollide,
+  forceCenter,
+  forceX,
+  forceY,
+  type Simulation,
+  type SimulationNodeDatum,
+  type SimulationLinkDatum,
+} from 'd3-force'
 
 // ── Props & Emits ──
 const props = defineProps<{
   data: { nodes: KnowledgeNode[]; links: KnowledgeLink[] }
+  // 初始是否展开全部层级（图谱管理页用于导入后直接展示完整图谱）
+  autoExpandAll?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -155,21 +169,15 @@ const groupColors: Record<number, string> = {
 const DEFAULT_COLOR = '#a0d911'
 const getColor = (group: number): string => groupColors[group] ?? DEFAULT_COLOR
 
-// ── Per-level layout config (group 0-3) ──
-const LEVEL_CONFIG: Record<number, { ringRadius: number; expandOffset: number }> = {
-  0: { ringRadius: 200, expandOffset: 840 },  // 一级：根节点
-  1: { ringRadius: 140, expandOffset: 160 },  // 二级：子节点
-  2: { ringRadius: 100, expandOffset: 160 },  // 三级：孙节点
-  3: { ringRadius: 90, expandOffset: 140 },  // 四级：曾孙节点
+// ── Force-driven layout config ──
+const FORCE = {
+  linkDistance: 110, // 默认边长（PREREQUISITE 略长、PARENT_KP 略短）
+  linkStrength: 0.4, // 弹簧强度
+  chargeStrength: -340, // 排斥力
+  collidePadding: 10, // 碰撞间隔
+  centerStrength: 0.06, // 向心约束，防止整图漂移
 }
-const FALLBACK_CONFIG = { ringRadius: 80, expandOffset: 120 }
-
-function getLevelRingRadius(group: number): number {
-  return LEVEL_CONFIG[group]?.ringRadius ?? FALLBACK_CONFIG.ringRadius
-}
-function getLevelExpandOffset(group: number): number {
-  return LEVEL_CONFIG[group]?.expandOffset ?? FALLBACK_CONFIG.expandOffset
-}
+const getBaseRadius = (group: number): number => (group === 0 ? 35 : 28)
 const MIN_ZOOM = 0.2
 const MAX_ZOOM = 3
 
@@ -191,6 +199,23 @@ const nodePositions = ref<Record<string, { x: number; y: number }>>({})
 const activeNodeId = ref<string | null>(null)
 const hoverNodeId = ref<string | null>(null)
 let activeTimeout: ReturnType<typeof setTimeout> | null = null
+
+// ── Force simulation state ──
+interface ForceNode extends SimulationNodeDatum {
+  id: string
+  name: string
+  group: number
+  level?: number
+  description?: string
+  radius: number
+}
+interface ForceLink extends SimulationLinkDatum<ForceNode> {
+  source: string | ForceNode
+  target: string | ForceNode
+  type: string
+}
+let simulation: Simulation<ForceNode, ForceLink> | null = null
+let fitTimer: ReturnType<typeof setTimeout> | null = null
 
 // ── Tooltip ──
 const tooltip = ref({
@@ -218,7 +243,9 @@ const parsedLinks = computed<TypedLink[]>(() =>
   props.data.links.map(l => ({ source: l.source, target: l.target, type: l.type || '' }))
 )
 
-const isParentLink = (type: string): boolean => type === 'PARENT_KP' || type === 'BELONGS_TO'
+// 层级父子关系：PARENT_KP / BELONGS_TO（知识点归属树）+ HAS_SUBTOPIC（知识域→子主题）+ PART_OF（子主题→知识点）
+const isParentLink = (type: string): boolean =>
+  type === 'PARENT_KP' || type === 'BELONGS_TO' || type === 'HAS_SUBTOPIC' || type === 'PART_OF'
 
 const childrenMap = computed(() => {
   const map = new Map<string, string[]>()
@@ -393,77 +420,101 @@ const getLabelFill = (node: KnowledgeNode): string => {
 }
 const truncateName = (name: string): string => (name.length > 8 ? name.slice(0, 8) + '...' : name)
 
-// ── Layout computation ──
-function computeLayout() {
-  const positions: Record<string, { x: number; y: number }> = { ...nodePositions.value }
-  const centerX = svgSize.width / 2
-  const centerY = svgSize.height / 2
-  const allLinks = parsedLinks.value
-  const cm = childrenMap.value
-  const expanded = expandedNodes.value
-  const visible = visibleNodeIds.value
+// ── Force simulation ──
+function stopSimulation() {
+  if (simulation) {
+    // 先移除监听再停止，避免旧实例触发 fitToContent
+    simulation.on('tick', null)
+    simulation.on('end', null)
+    simulation.stop()
+    simulation = null
+  }
+  if (fitTimer) {
+    clearTimeout(fitTimer)
+    fitTimer = null
+  }
+}
 
-  // 1. Root nodes (group=0): evenly on circle
-  const roots = props.data.nodes.filter(n => n.group === 0)
-  const rootIds =
-    roots.length > 0
-      ? roots
-      : (() => {
-          const targeted = new Set(allLinks.filter(l => l.type === 'PARENT_KP').map(l => l.target))
-          return props.data.nodes.filter(n => !targeted.has(n.id))
-        })()
+function linkDistance(l: ForceLink): number {
+  const base = FORCE.linkDistance
+  if (l.type === 'PREREQUISITE') return base * 1.4
+  if (l.type === 'PARENT_KP') return base * 0.9
+  return base
+}
 
-  rootIds.forEach((node, i) => {
-    const angle = (i / rootIds.length) * 2 * Math.PI - Math.PI / 2
-    const ringR = getLevelRingRadius(node.group)
-    const offsetR = getLevelExpandOffset(node.group)
-    const radius = expanded.has(node.id) ? ringR + offsetR : ringR
-    positions[node.id] = {
-      x: centerX + Math.cos(angle) * radius,
-      y: centerY + Math.sin(angle) * radius,
+/**
+ * 以当前可见节点/链接集合重建 d3-force 力模拟。
+ * 可见集合变化（展开/收起/数据替换/容器 resize）时调用：
+ * 增删 sim 节点、更新 links，并保留旧坐标热启动。
+ */
+function buildSimulation() {
+  stopSimulation()
+
+  const nodes = visibleNodes.value
+  const links = visibleLinks.value
+  if (nodes.length === 0) return
+
+  const width = svgSize.width || 800
+  const height = svgSize.height || 600
+  const oldPos = nodePositions.value
+
+  const simNodes: ForceNode[] = nodes.map(n => ({
+    id: n.id,
+    name: n.name,
+    group: n.group,
+    level: n.level,
+    description: n.description,
+    radius: getBaseRadius(n.group),
+    // 已有节点保留原坐标作为热启动；新节点在视口中心附近随机散布
+    x: oldPos[n.id] ? oldPos[n.id]!.x : width / 2 + (Math.random() - 0.5) * 80,
+    y: oldPos[n.id] ? oldPos[n.id]!.y : height / 2 + (Math.random() - 0.5) * 80,
+  }))
+
+  const simLinks: ForceLink[] = links.map(l => ({
+    source: l.source,
+    target: l.target,
+    type: l.type,
+  }))
+
+  const sim = forceSimulation<ForceNode, ForceLink>(simNodes)
+    .force(
+      'link',
+      forceLink<ForceNode, ForceLink>(simLinks)
+        .id(d => d.id)
+        .distance(linkDistance)
+        .strength(FORCE.linkStrength)
+    )
+    .force('charge', forceManyBody<ForceNode>().strength(FORCE.chargeStrength))
+    .force(
+      'collide',
+      forceCollide<ForceNode>().radius(d => d.radius + FORCE.collidePadding)
+    )
+    .force('center', forceCenter<ForceNode>(width / 2, height / 2))
+    .force('x', forceX<ForceNode>(width / 2).strength(FORCE.centerStrength))
+    .force('y', forceY<ForceNode>(height / 2).strength(FORCE.centerStrength))
+
+  simulation = sim
+
+  // 每帧 tick 同步坐标到响应式 nodePositions，驱动 SVG 渲染
+  sim.on('tick', () => {
+    const pos: Record<string, { x: number; y: number }> = {}
+    for (const node of simNodes) {
+      pos[node.id] = { x: node.x ?? 0, y: node.y ?? 0 }
     }
+    nodePositions.value = pos
   })
 
-  // 2. BFS from expanded roots: position children layer by layer
-  const queue = rootIds.filter(n => expanded.has(n.id)).map(n => n.id)
-  const processed = new Set<string>()
+  // 收敛后自动适配视口（fitToContent）
+  sim.on('end', () => {
+    fitToContent()
+  })
 
-  while (queue.length > 0) {
-    const nodeId = queue.shift()!
-    if (processed.has(nodeId)) continue
-    processed.add(nodeId)
+  sim.alpha(0.5).restart()
 
-    const parentPos = positions[nodeId]
-    if (!parentPos) continue
-
-    const children = (cm.get(nodeId) || []).filter(id => visible.has(id))
-    children.forEach((childId, i) => {
-      const childNode = nodeMap.value.get(childId)
-      const angle = (i / children.length) * 2 * Math.PI - Math.PI / 2
-      const ringR = childNode ? getLevelRingRadius(childNode.group) : FALLBACK_CONFIG.ringRadius
-      const offsetR = childNode ? getLevelExpandOffset(childNode.group) : FALLBACK_CONFIG.expandOffset
-      const radius = expanded.has(childId) ? ringR + offsetR : ringR
-      positions[childId] = {
-        x: parentPos.x + Math.cos(angle) * radius,
-        y: parentPos.y + Math.sin(angle) * radius,
-      }
-      if (expanded.has(childId) && !processed.has(childId)) {
-        queue.push(childId)
-      }
-    })
-  }
-
-  // 3. Fallback for any remaining visible nodes without position
-  for (const node of props.data.nodes) {
-    if (visible.has(node.id) && !positions[node.id]) {
-      positions[node.id] = {
-        x: centerX + (Math.random() - 0.5) * 60,
-        y: centerY + (Math.random() - 0.5) * 60,
-      }
-    }
-  }
-
-  nodePositions.value = positions
+  // 兜底：即使 alpha 未完全收敛，也保证图稳定后 fit 一次
+  fitTimer = setTimeout(() => {
+    if (simulation === sim) fitToContent()
+  }, 2500)
 }
 
 // ── Expand / Collapse ──
@@ -500,41 +551,22 @@ function toggleNode(nodeId: string) {
     expandedNodes.value = new Set([...expandedNodes.value, nodeId])
   }
 
-  // Compute layout for new positions
-  nextTick(() => computeLayout())
+  // 可见集合变化由下方 watch([expandedNodes, visibleNodeIds]) 驱动重建力模拟
 }
 
 // ── Event Handlers ──
 const handleNodeClick = (node: KnowledgeNode, event: MouseEvent) => {
   event.stopPropagation()
 
+  // 新交互：单击节点仅负责“展开下一级”。
+  // 有下一级（子级）且未展开 → 展开显示下一级；
+  // 已展开 → 保持展开，不再收拢、不再定位高亮；
+  // 没有下一级 → 不做任何动作，节点保持不变（进入课程交给双击）。
   const hasChildren = (hasChildrenMap.value.get(node.id)?.length ?? 0) > 0
-  const isExpanded = expandedNodes.value.has(node.id)
-
-  // 未展开且有子节点 → 仅展开，不触发定位
-  if (hasChildren && !isExpanded) {
-    toggleNode(node.id)
-    return
-  }
-
-  // 已展开或无子节点 → 走定位逻辑
-  if (activeTimeout) clearTimeout(activeTimeout)
-  if (activeNodeId.value === node.id) {
-    activeNodeId.value = null
-  } else {
-    activeNodeId.value = node.id
-    activeTimeout = setTimeout(() => {
-      activeNodeId.value = null
-      activeTimeout = null
-    }, 2000)
-  }
-
-  // 已展开节点再点击：收拢
-  if (hasChildren && isExpanded) {
+  if (!hasChildren) return
+  if (!expandedNodes.value.has(node.id)) {
     toggleNode(node.id)
   }
-
-  emit('node-click', node.id)
 }
 
 const handleIndicatorClick = (nodeId: string) => {
@@ -543,6 +575,11 @@ const handleIndicatorClick = (nodeId: string) => {
 
 const handleNodeDblClick = (nodeId: string, event: MouseEvent) => {
   event.stopPropagation()
+  // 新交互：双击节点进入该节点对应的课程。
+  // 复用父组件 CourseDetail.vue 现有 @node-click="handleGraphNodeClick" → selectKpFromGraph
+  // 的“进入课程/展示该知识点资源”机制，不发明新路由。
+  // 保留 node-dblclick 发射以维持原有对外契约（父组件当前未绑定，无副作用）。
+  emit('node-click', nodeId)
   emit('node-dblclick', nodeId)
 }
 
@@ -664,6 +701,7 @@ const centerOnNodeById = (nodeId: string) => {
   const h = containerRef.value.clientHeight
   zoom.x = w / 2 - pos.x * zoom.scale
   zoom.y = h / 2 - pos.y * zoom.scale
+  fitToContent()
 }
 
 const flashNode = (nodeId: string) => {
@@ -719,31 +757,44 @@ function updateSvgSize() {
 }
 
 // ── Watchers ──
+function applyInitialExpand() {
+  if (!props.autoExpandAll) return
+  for (const l of parsedLinks.value) {
+    if (isParentLink(l.type)) expandedNodes.value.add(l.source)
+  }
+}
+
 watch(
   () => props.data,
   () => {
     expandedNodes.value = new Set()
+    applyInitialExpand()
     nodePositions.value = {}
     learningPathNodeIds.value = new Set()
     learningPathEdgeSet.value = new Set()
     searchKeyword.value = ''
-    nextTick(() => {
-      computeLayout()
-      nextTick(() => fitToContent())
-    })
+    nextTick(() => buildSimulation())
   },
   { deep: true }
 )
 
-watch(expandedNodes, () => {
-  nextTick(() => computeLayout())
-}, { deep: true })
+// 仅当可见集合（展开/收起）变化时重建模拟，坐标变化由 simulation tick 驱动
+watch(
+  [expandedNodes, visibleNodeIds],
+  () => {
+    nextTick(() => buildSimulation())
+  },
+  { deep: true }
+)
 
 // ── Lifecycle ──
 onMounted(() => {
   nextTick(() => {
+    // 首次挂载也应用初始展开（autoExpandAll），否则初始只显示根节点
+    expandedNodes.value = new Set()
+    applyInitialExpand()
     if (updateSvgSize()) {
-      computeLayout()
+      buildSimulation()
     }
 
     if (containerRef.value) {
@@ -751,22 +802,20 @@ onMounted(() => {
         if (resizeTimer) clearTimeout(resizeTimer)
         resizeTimer = setTimeout(() => {
           if (updateSvgSize()) {
-            // Re-layout on resize
+            // Re-run force simulation on resize（保留当前展开状态，热启动）
             nodePositions.value = {}
-            expandedNodes.value = new Set()
-            computeLayout()
+            buildSimulation()
           }
         }, 100)
       })
       resizeObserver.observe(containerRef.value)
     }
-
-    nextTick(() => fitToContent())
   })
 })
 
 onBeforeUnmount(() => {
   nodePositions.value = {}
+  stopSimulation()
   if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null
