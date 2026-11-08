@@ -1,4 +1,4 @@
-<template>
+git add .<template>
   <router-view />
   <AIAssistant />
 </template>
