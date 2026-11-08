@@ -1,0 +1,2634 @@
+<template>
+  <div class="course-detail">
+    <div class="course-topbar">
+      <h1 class="course-title">{{ courseName }}</h1>
+      <el-button
+        v-if="!isCourseEnrolled"
+        type="primary"
+        size="small"
+        :loading="enrolling"
+        @click="handleEnrollCourse"
+      >
+        加入课表
+      </el-button>
+      <el-button
+        v-else
+        type="danger"
+        size="small"
+        :loading="unenrolling"
+        @click="handleUnenrollCourse"
+      >
+        移除课表
+      </el-button>
+    </div>
+    <div class="main-layout" v-loading="pageLoading">
+      <!-- 左侧：章节列表 -->
+      <aside class="chapter-sidebar">
+        <h3 class="sidebar-title">章节目录</h3>
+        <div v-if="loadError" class="error-hint">
+          <p>加载失败，请检查网络或重新登录</p>
+          <el-button type="primary" size="small" @click="fetchChapters">重试</el-button>
+        </div>
+        <div v-else-if="!subTopics.length" class="empty-hint">暂无章节</div>
+        <div v-else class="chapter-list">
+          <div
+            v-for="st in subTopics"
+            :key="st.id"
+            class="chapter-group"
+          >
+            <div
+              class="chapter-header"
+              :class="{ expanded: expandedChapters.has(st.id) }"
+              @click="toggleChapter(st.id)"
+            >
+              <span class="arrow-icon">{{ expandedChapters.has(st.id) ? '▼' : '▶' }}</span>
+              <span class="chapter-name">{{ st.name }}</span>
+              <span class="chapter-count">({{ countAllKps(st.knowledgePoints) }})</span>
+            </div>
+            <div v-show="expandedChapters.has(st.id)" class="kp-tree">
+              <template v-for="kp in st.knowledgePoints" :key="kp.id">
+                <KpTreeNode
+                  :node="kp"
+                  :selected-id="selectedKpId"
+                  @select="selectKp"
+                />
+              </template>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- 右侧：资源面板 -->
+      <main class="resource-panel">
+        <template v-if="!selectedKp && !selectedSubTopic">
+          <div class="panel-placeholder">
+            <el-icon :size="48" color="#c0c4cc"><Reading /></el-icon>
+            <p>请从左侧选择一个章节或知识点</p>
+            <el-button
+              v-if="subTopics.length"
+              type="primary"
+              size="small"
+              class="start-assessment-btn"
+              @click="selectFirstChapterForAssessment"
+            >
+              进入章节测评
+            </el-button>
+          </div>
+        </template>
+        <template v-else-if="!selectedKp && selectedSubTopic">
+          <div class="kp-header">
+            <h2>{{ selectedSubTopic.name }}</h2>
+            <p v-if="selectedSubTopic.description" class="kp-desc">{{ selectedSubTopic.description }}</p>
+          </div>
+
+          <el-tabs v-model="chapterActiveTab" class="resource-tabs">
+            <el-tab-pane label="测评" name="assessment">
+              <div class="embedded-page">
+                <template v-if="chapterAssessmentQuestions.length">
+                  <AssessmentPage
+                    :questions="chapterAssessmentQuestions"
+                    :title="selectedSubTopic.name"
+                    embedded
+                  />
+                </template>
+                <el-empty v-else description="该章节下暂无测评题目" />
+              </div>
+            </el-tab-pane>
+          </el-tabs>
+        </template>
+        <template v-else>
+          <div class="kp-header">
+            <h2>{{ selectedKp?.name }}</h2>
+            <p v-if="selectedKp?.description" class="kp-desc">{{ selectedKp?.description }}</p>
+          </div>
+
+          <el-tabs v-model="activeTab" class="resource-tabs" lazy @tab-click="handleTabClick">
+            <!-- 知识图谱 -->
+            <el-tab-pane label="知识图谱" name="graph">
+              <div class="graph-tab-container" v-loading="graphLoading">
+                <KnowledgeGraphChart
+                  v-if="graphData.nodes.length > 0"
+                  ref="graphRef"
+                  :data="graphData"
+                  @node-click="handleGraphNodeClick"
+                />
+                <el-empty v-else-if="!graphLoading" description="暂无知识图谱数据" />
+              </div>
+            </el-tab-pane>
+
+            <!-- 视频 -->
+            <el-tab-pane v-if="selectedKp?.videos?.length" label="视频" name="videos">
+              <div class="resource-grid">
+                <el-card v-for="v in selectedKp?.videos" :key="v.id" class="resource-card video-card">
+                  <div class="video-preview" @click="playVideo(v)">
+                    <el-icon :size="36"><VideoPlay /></el-icon>
+                  </div>
+                  <div class="card-body">
+                    <span class="title">{{ v.title }}</span>
+                    <span class="meta" v-if="v.duration">{{ formatDuration(v.duration) }}</span>
+                  </div>
+                </el-card>
+              </div>
+            </el-tab-pane>
+
+            <!-- 课件 -->
+            <el-tab-pane v-if="selectedKp?.coursewares?.length" label="课件" name="courseware">
+              <div class="resource-grid">
+                <el-card v-for="c in selectedKp.coursewares" :key="c.id" class="resource-card">
+                  <div class="courseware-icon" @click="openCourseware(c)">
+                    <el-icon :size="36"><Document /></el-icon>
+                  </div>
+                  <div class="card-body">
+                    <span class="title">{{ c.title }}</span>
+                    <el-tag size="small" type="info">{{ c.fileType }}</el-tag>
+                  </div>
+                </el-card>
+              </div>
+            </el-tab-pane>
+
+            <!-- 笔记 -->
+            <el-tab-pane label="笔记" name="notes">
+              <div v-loading="notesLoading">
+                <el-empty v-if="!kpNotes.length" description="暂无笔记" />
+                <div v-else class="kp-notes-list">
+                  <div
+                    v-for="note in kpNotes"
+                    :key="note.id"
+                    class="kp-note-card"
+                  >
+                    <div class="kp-note-card-header">
+                      <el-tag
+                        size="small"
+                        type="info"
+                        class="note-timestamp-tag"
+                        @click="seekToNoteVideo(note)"
+                      >
+                        视频 {{ formatTime(note.timestamp) }}
+                      </el-tag>
+                      <div class="kp-note-card-actions">
+                        <el-button text size="small" @click="editKpNote(note)">
+                          <el-icon><Edit /></el-icon>
+                        </el-button>
+                        <el-button text size="small" type="danger" @click="handleDeleteKpNote(note.id)">
+                          <el-icon><Delete /></el-icon>
+                        </el-button>
+                      </div>
+                    </div>
+                    <div class="kp-note-card-content">{{ note.content }}</div>
+                    <div class="kp-note-card-footer">
+                      <span class="kp-note-meta">{{ note.createTime?.slice(0, 10) }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </el-tab-pane>
+
+            <!-- 测试 -->
+            <el-tab-pane v-if="selectedKp?.questions?.length" label="测试" name="quiz">
+              <!-- 批次列表 -->
+              <div v-if="showQuizList" class="quiz-batch-list">
+                <div class="quiz-batch-list-header">
+                  <h3>{{ selectedKp?.name || '测试' }}</h3>
+                  <span class="quiz-batch-list-total">共 {{ allQuizQuestions.length }} 题，分 {{ totalQuizBatches }} 批</span>
+                </div>
+                <div class="quiz-batch-cards">
+                  <div
+                    v-for="(batch, idx) in quizBatches"
+                    :key="idx"
+                    class="quiz-batch-card"
+                  >
+                    <div class="batch-main">
+                      <div class="batch-header">
+                        <span class="batch-label">测试{{ batchNumberText(idx + 1) }}</span>
+                        <span class="batch-count">{{ batch.length }} 题</span>
+                      </div>
+                      <div class="batch-status-row">
+                        <template v-if="latestBatchScore(idx)">
+                          <span class="batch-status done">第{{ quizBatchScores[idx].length }}次</span>
+                          <span class="batch-score">{{ latestBatchScore(idx)!.correctCount }}/{{ latestBatchScore(idx)!.totalQuestions }} · {{ Math.round((latestBatchScore(idx)!.correctCount / latestBatchScore(idx)!.totalQuestions) * 100) }}%</span>
+                        </template>
+                        <span v-else class="batch-status pending">未完成</span>
+                      </div>
+                    </div>
+                    <div class="batch-actions">
+                      <el-button
+                        v-if="quizBatchScores[idx].length > 0"
+                        size="small"
+                        @click="showBatchHistory(idx)"
+                      >查看历史</el-button>
+                      <el-button
+                        type="primary"
+                        size="small"
+                        @click="startQuizBatch(idx)"
+                      >
+                        {{ latestBatchScore(idx) ? '重新测试' : '开始测试' }}
+                      </el-button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 答题阶段 -->
+              <div v-else-if="!quizSubmitted && questions.length > 0" class="quiz-container">
+                <div class="quiz-nav">
+                  <span class="quiz-back-link" @click="goToQuizList">
+                    <el-icon><ArrowLeft /></el-icon> 返回列表
+                  </span>
+                  <span class="quiz-nav-title">{{ selectedKp?.name || '测试' }} · {{ quizBatchLabel }}</span>
+                  <div class="quiz-nav-right">
+                    <span class="quiz-counter">第 {{ currentQIndex + 1 }} / {{ questions.length }} 题</span>
+                    <el-progress :percentage="quizProgress" :stroke-width="6" :show-text="false" class="quiz-progress-bar" />
+                  </div>
+                </div>
+
+                <div class="quiz-question-card">
+                  <div class="quiz-question-type">
+                    <el-tag
+                      :type="(currentQ?.type === 'single' || currentQ?.type === 'judge') ? 'primary' : currentQ?.type === 'multiple' ? 'warning' : currentQ?.type === 'fill' ? 'success' : 'info'"
+                      size="small"
+                    >
+                      {{ questionTypeLabel(currentQ?.type) }}
+                    </el-tag>
+                  </div>
+                  <h2 class="quiz-question-text">{{ currentQ?.content }}</h2>
+
+                  <!-- 选择题选项 -->
+                  <div v-if="isQuizChoiceType(currentQ?.type)" class="quiz-option-list">
+                    <div
+                      v-for="opt in parseOptions(currentQ?.options || '')"
+                      :key="opt.key"
+                      class="quiz-option-item"
+                      :class="{ 'option-selected': selectedAnswers.includes(opt.key) }"
+                      @click="selectQuizOption(opt.key)"
+                    >
+                      <div class="quiz-option-key">{{ opt.key }}</div>
+                      <div class="quiz-option-text">{{ opt.text }}</div>
+                    </div>
+                  </div>
+
+                  <!-- 填空题输入 -->
+                  <div v-else-if="currentQ?.type === 'fill'" class="quiz-text-answer-area">
+                    <div class="quiz-text-answer-label">请输入答案（多空用 | 分隔）：</div>
+                    <el-input v-model="textAnswer" placeholder="例如：DISTINCT|PRIMARY KEY" size="large" clearable />
+                  </div>
+
+                  <!-- 问答题输入 -->
+                  <div v-else-if="currentQ?.type === 'qa'" class="quiz-text-answer-area">
+                    <div class="quiz-text-answer-label">请输入你的回答（支持多行）：</div>
+                    <el-input v-model="textAnswer" type="textarea" :rows="6" resize="vertical" placeholder="请在此输入答案或代码…" />
+                  </div>
+
+                  <div class="quiz-nav-buttons">
+                    <el-button v-if="currentQIndex > 0" @click="handleQuizPrev">上一题</el-button>
+                    <el-button
+                      v-if="currentQIndex < questions.length - 1"
+                      type="primary"
+                      @click="handleQuizNext"
+                      :disabled="!canGoNext"
+                    >下一题</el-button>
+                    <el-button
+                      v-if="currentQIndex === questions.length - 1"
+                      type="success"
+                      @click="submitQuiz"
+                      :disabled="!canGoNext"
+                      :loading="submitLoading"
+                    >提交答案</el-button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 结果阶段 -->
+              <div v-else-if="quizSubmitted && quizScore" class="quiz-result-container">
+                <div class="quiz-result-card">
+                  <div class="quiz-result-header">
+                    <el-icon class="quiz-result-icon" :size="64" color="#67c23a">
+                      <SuccessFilled />
+                    </el-icon>
+                    <h2 class="quiz-result-title">答题完成！</h2>
+                  </div>
+
+                  <div class="quiz-result-score">
+                    <div class="score-ring">
+                      <svg viewBox="0 0 100 100" class="score-ring-svg">
+                        <circle class="score-ring-bg" cx="50" cy="50" r="45" />
+                        <circle
+                          class="score-ring-progress"
+                          cx="50" cy="50" r="45"
+                          :style="{ strokeDasharray: quizCircumference, strokeDashoffset: quizStrokeDashoffset }"
+                        />
+                      </svg>
+                      <div class="score-ring-text">
+                        <span class="score-ring-number">{{ (quizScore.correctCount ?? 0) * 3 }}</span>
+                        <span class="score-ring-total">/ {{ (quizScore.totalQuestions ?? 0) * 3 }}</span>
+                      </div>
+                    </div>
+                    <div class="score-summary">
+                      <div class="score-summary-item">
+                        <span class="score-summary-label">正确率</span>
+                        <span class="score-summary-value accuracy">{{ quizAccuracy }}%</span>
+                      </div>
+                      <div class="score-summary-item">
+                        <span class="score-summary-label">答题数</span>
+                        <span class="score-summary-value">{{ quizScore.correctCount ?? 0 }}/{{ quizScore.totalQuestions ?? 0 }}</span>
+                      </div>
+                      <div class="score-summary-item">
+                        <span class="score-summary-label">用时</span>
+                        <span class="score-summary-value">{{ quizTimeSpent }}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="quiz-result-actions">
+                    <el-button @click="goToQuizList">返回列表</el-button>
+                    <el-button @click="restartQuiz">重新答题</el-button>
+                    <el-button type="primary" @click="showQuizAnalysis = true" v-if="!showQuizAnalysis">查看解析</el-button>
+                  </div>
+                </div>
+
+                <!-- 解析区 -->
+                <div v-if="showQuizAnalysis" class="quiz-analysis-section">
+                  <h3 class="quiz-analysis-title">答题解析</h3>
+                  <div v-for="item in quizReviewItems" :key="item.questionId" class="quiz-analysis-card">
+                    <div class="quiz-analysis-question-header">
+                      <span class="quiz-analysis-question-text">{{ item.content }}</span>
+                    </div>
+
+                    <!-- 选择题解析：只高亮用户选择的选项，选对为绿、选错为红 -->
+                    <div v-if="isQuizChoiceType(item.type)" class="quiz-analysis-options">
+                      <div v-for="opt in parseOptions(item.options)" :key="opt.key" class="quiz-analysis-opt">
+                        <div
+                          class="quiz-option-key"
+                          :class="{
+                            'opt-correct': isAnswerKeyIncluded(item.userAnswer, opt.key) && isAnswerKeyIncluded(item.correctAnswer, opt.key),
+                            'opt-wrong': isAnswerKeyIncluded(item.userAnswer, opt.key) && !isAnswerKeyIncluded(item.correctAnswer, opt.key)
+                          }"
+                        >{{ opt.key }}</div>
+                        <span
+                          class="quiz-analysis-opt-text"
+                          :class="{
+                            'text-correct': isAnswerKeyIncluded(item.userAnswer, opt.key) && isAnswerKeyIncluded(item.correctAnswer, opt.key),
+                            'text-wrong': isAnswerKeyIncluded(item.userAnswer, opt.key) && !isAnswerKeyIncluded(item.correctAnswer, opt.key)
+                          }"
+                        >{{ opt.text }}</span>
+                        <el-icon v-if="isAnswerKeyIncluded(item.userAnswer, opt.key) && isAnswerKeyIncluded(item.correctAnswer, opt.key)" class="opt-icon-correct" :size="18"><CircleCheckFilled /></el-icon>
+                        <el-icon v-if="isAnswerKeyIncluded(item.userAnswer, opt.key) && !isAnswerKeyIncluded(item.correctAnswer, opt.key)" class="opt-icon-wrong" :size="18"><CircleCloseFilled /></el-icon>
+                      </div>
+                    </div>
+
+                    <!-- 第一个灰色框：你的答案 + 正确答案（所有题型） -->
+                    <div class="quiz-text-analysis">
+                      <div class="quiz-text-analysis-row">
+                        <span class="quiz-text-analysis-label">你的答案：</span>
+                        <span
+                          class="quiz-text-analysis-value"
+                          :class="item.isCorrect ? 'text-correct' : 'text-wrong'"
+                        >
+                          {{ getUserAnswerDisplay(item) }}
+                        </span>
+                      </div>
+                      <div class="quiz-text-analysis-row">
+                        <span class="quiz-text-analysis-label">{{ item.type === 'qa' ? '参考答案：' : '正确答案：' }}</span>
+                        <span class="quiz-text-analysis-value text-correct">{{ getCorrectAnswerDisplay(item) }}</span>
+                      </div>
+                      <div v-if="item.type === 'qa'" class="quiz-text-analysis-tip">* 问答题为开放性题目，结果仅供参考，实际请等待教师评分。</div>
+                    </div>
+
+                    <!-- 第二个灰色框：详细解析 -->
+                    <div class="quiz-analysis-explanation">
+                      <el-icon><Document /></el-icon>
+                      <span class="quiz-analysis-explanation-label">解析：</span>
+                      <span class="quiz-analysis-explanation-text">{{ getAnalysisDisplay(item) }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <el-empty v-if="!showQuizList && !quizSubmitted && !questions.length" description="暂无测试题" />
+
+              <!-- 历史记录弹窗 -->
+              <el-dialog
+                :model-value="historyDialogBatchIdx !== null"
+                title="测试历史记录"
+                width="480px"
+                @update:model-value="(val: boolean) => { if (!val) historyDialogBatchIdx = null }"
+              >
+                <template v-if="historyDialogBatchIdx !== null">
+                  <h4 class="history-title">测试{{ batchNumberText(historyDialogBatchIdx + 1) }}</h4>
+                  <div
+                    v-for="(record, ri) in [...quizBatchScores[historyDialogBatchIdx]].reverse()"
+                    :key="ri"
+                    class="history-item history-item-clickable"
+                    @click="openHistoryDetail(record)"
+                  >
+                    <span class="history-index">第{{ quizBatchScores[historyDialogBatchIdx].length - ri }}次</span>
+                    <span class="history-score">{{ record.correctCount }}/{{ record.totalQuestions }} 正确</span>
+                    <span class="history-pct">{{ Math.round((record.correctCount / record.totalQuestions) * 100) }}%</span>
+                    <span class="history-score-val">{{ record.correctCount * 3 }} 分</span>
+                    <el-icon class="history-chevron"><ArrowRight /></el-icon>
+                  </div>
+                  <el-empty v-if="quizBatchScores[historyDialogBatchIdx].length === 0" description="暂无记录" :image-size="40" />
+                </template>
+              </el-dialog>
+
+              <!-- 历史记录详情弹窗 -->
+              <el-dialog
+                :model-value="historyDetailRecord !== null"
+                title="答题详情"
+                width="760px"
+                top="5vh"
+                @update:model-value="(val: boolean) => { if (!val) historyDetailRecord = null }"
+              >
+                <template v-if="historyDetailRecord">
+                  <div class="history-detail-summary">
+                    <span class="history-detail-score">{{ historyDetailRecord.correctCount }}/{{ historyDetailRecord.totalQuestions }} 正确</span>
+                    <span class="history-detail-pct">{{ Math.round((historyDetailRecord.correctCount / historyDetailRecord.totalQuestions) * 100) }}%</span>
+                    <span class="history-detail-val">{{ historyDetailRecord.correctCount * 3 }} 分</span>
+                  </div>
+
+                  <div v-if="!historyDetailRecord.items || historyDetailRecord.items.length === 0" class="history-detail-empty">
+                    本次记录未保存每道题的作答详情，仅能看到总分。
+                  </div>
+
+                  <div v-else class="quiz-analysis-section history-detail-section">
+                    <el-alert
+                      v-if="isHistoryDetailLegacy"
+                      title="旧记录提示"
+                      type="warning"
+                      :closable="false"
+                      description="该记录是在功能升级前保存的，因此无法显示你的作答答案。重新测试一次即可查看完整详情。"
+                      class="history-detail-legacy-alert"
+                    />
+                    <div
+                      v-for="(item, idx) in historyDetailItems"
+                      :key="item.questionId"
+                      class="quiz-analysis-card"
+                    >
+                      <div class="quiz-analysis-question-header">
+                        <span class="quiz-analysis-question-text">{{ idx + 1 }}. {{ item.content || `题目 ${item.questionId}` }}</span>
+                      </div>
+
+                      <!-- 选择题解析：只高亮用户选择的选项，选对为绿、选错为红 -->
+                      <div v-if="isQuizChoiceType(item.type)" class="quiz-analysis-options">
+                        <div v-for="opt in parseOptions(item.options || '')" :key="opt.key" class="quiz-analysis-opt">
+                          <div
+                            class="quiz-option-key"
+                            :class="{
+                              'opt-correct': isAnswerKeyIncluded(item.userAnswer, opt.key) && isAnswerKeyIncluded(item.correctAnswer, opt.key),
+                              'opt-wrong': isAnswerKeyIncluded(item.userAnswer, opt.key) && !isAnswerKeyIncluded(item.correctAnswer, opt.key)
+                            }"
+                          >{{ opt.key }}</div>
+                          <span
+                            class="quiz-analysis-opt-text"
+                            :class="{
+                              'text-correct': isAnswerKeyIncluded(item.userAnswer, opt.key) && isAnswerKeyIncluded(item.correctAnswer, opt.key),
+                              'text-wrong': isAnswerKeyIncluded(item.userAnswer, opt.key) && !isAnswerKeyIncluded(item.correctAnswer, opt.key)
+                            }"
+                          >{{ opt.text }}</span>
+                          <el-icon v-if="isAnswerKeyIncluded(item.userAnswer, opt.key) && isAnswerKeyIncluded(item.correctAnswer, opt.key)" class="opt-icon-correct" :size="18"><CircleCheckFilled /></el-icon>
+                          <el-icon v-if="isAnswerKeyIncluded(item.userAnswer, opt.key) && !isAnswerKeyIncluded(item.correctAnswer, opt.key)" class="opt-icon-wrong" :size="18"><CircleCloseFilled /></el-icon>
+                        </div>
+                      </div>
+
+                      <!-- 第一个灰色框：你的答案 + 正确答案 -->
+                      <div class="quiz-text-analysis">
+                        <div class="quiz-text-analysis-row">
+                          <span class="quiz-text-analysis-label">你的答案：</span>
+                          <span
+                            class="quiz-text-analysis-value"
+                            :class="item.isCorrect ? 'text-correct' : 'text-wrong'"
+                          >
+                            {{ getUserAnswerDisplay(item) }}
+                          </span>
+                        </div>
+                        <div class="quiz-text-analysis-row">
+                          <span class="quiz-text-analysis-label">{{ item.type === 'qa' ? '参考答案：' : '正确答案：' }}</span>
+                          <span class="quiz-text-analysis-value text-correct">{{ getCorrectAnswerDisplay(item) }}</span>
+                        </div>
+                        <div v-if="item.type === 'qa'" class="quiz-text-analysis-tip">* 问答题为开放性题目，结果仅供参考，实际请等待教师评分。</div>
+                      </div>
+
+                      <!-- 第二个灰色框：详细解析 -->
+                      <div class="quiz-analysis-explanation">
+                        <el-icon><Document /></el-icon>
+                        <span class="quiz-analysis-explanation-label">解析：</span>
+                        <span class="quiz-analysis-explanation-text">{{ item.analysis || '暂无' }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </el-dialog>
+            </el-tab-pane>
+
+            <!-- 推荐 -->
+            <el-tab-pane label="推荐" name="recommend">
+              <div class="embedded-page">
+                <RecommendationsPage embedded />
+              </div>
+            </el-tab-pane>
+
+            <!-- 诊断 -->
+            <el-tab-pane label="诊断" name="diagnosis">
+              <div class="embedded-page">
+                <RadarChartPage embedded :course-id="courseId" />
+              </div>
+            </el-tab-pane>
+
+            <!-- 作业 -->
+            <el-tab-pane label="作业" name="homework">
+              <div class="embedded-homework" v-loading="homeworkLoading">
+                <el-empty v-if="homeworkList.length === 0 && !homeworkLoading" description="暂无已发布的作业" />
+                <el-table v-else :data="homeworkList" border stripe>
+                  <el-table-column prop="title" label="作业标题" min-width="160" />
+                  <el-table-column prop="description" label="作业描述" min-width="220" show-overflow-tooltip />
+                  <el-table-column label="截止时间" width="170">
+                    <template #default="{ row }">{{ formatHomeworkTime(row.deadline) }}</template>
+                  </el-table-column>
+                  <el-table-column label="状态" width="100">
+                    <template #default="{ row }">
+                      <el-tag :type="row.status === 'closed' ? 'info' : 'success'">
+                        {{ homeworkStatusText[row.status] || row.status }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="我的评分" width="120">
+                    <template #default="{ row }">
+                      <span v-if="row.myScore !== null && row.myScore !== undefined" class="homework-score">
+                        {{ row.myScore }} 分
+                        <el-tooltip v-if="row.myFeedback" :content="row.myFeedback" placement="top">
+                          <el-button link type="primary">反馈</el-button>
+                        </el-tooltip>
+                      </span>
+                      <span v-else class="homework-no-op">-</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="操作" width="160">
+                    <template #default="{ row }">
+                      <el-button
+                        v-if="row.status === 'published'"
+                        type="primary"
+                        size="small"
+                        @click="openSubmitHomework(row)"
+                      >提交作业</el-button>
+                      <span v-else class="homework-no-op">-</span>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </el-tab-pane>
+          </el-tabs>
+
+          <!-- 视频播放器对话框 -->
+          <el-dialog
+            v-model="videoDialogVisible"
+            width="90%"
+            top="5vh"
+            :close-on-click-modal="false"
+            @close="handleVideoDialogClose"
+          >
+            <template #header>
+              <div class="video-dialog-header">
+                <span>{{ currentVideo?.title || '视频播放' }}</span>
+                <div class="video-dialog-header-actions">
+                  <el-button
+                    :type="showNotePanel && activePanel === 'note' ? 'primary' : 'default'"
+                    size="small"
+                    @click="openVideoPanel('note')"
+                  >
+                    <el-icon><Notebook /></el-icon>
+                    <span>笔记</span>
+                  </el-button>
+                  <el-button
+                    :type="showNotePanel && activePanel === 'discussion' ? 'primary' : 'default'"
+                    size="small"
+                    @click="openVideoPanel('discussion')"
+                  >
+                    <el-icon><ChatDotRound /></el-icon>
+                    <span>讨论</span>
+                  </el-button>
+                </div>
+              </div>
+            </template>
+            <div class="video-dialog-content">
+              <VideoPlayer
+                v-if="videoDialogVisible && currentVideo"
+                ref="videoPlayerRef"
+                :video-id="currentVideo.id"
+                :video-src="getVideoSrc(currentVideo)"
+                :knowledge-point-id="selectedKpId"
+                :course-id="courseId"
+                :show-note-panel="showNotePanel"
+                :active-panel="activePanel"
+                @toggle-note-panel="toggleNotePanel"
+                @update:active-panel="activePanel = $event"
+                @ended="handleVideoEnded"
+              />
+            </div>
+          </el-dialog>
+
+          <!-- 编辑笔记弹窗 -->
+          <el-dialog v-model="noteEditDialogVisible" title="编辑笔记" width="480px">
+            <el-input v-model="noteEditContent" type="textarea" :rows="5" />
+            <template #footer>
+              <el-button @click="noteEditDialogVisible = false">取消</el-button>
+              <el-button type="primary" @click="saveKpNote" :loading="noteSaveLoading">保存</el-button>
+            </template>
+          </el-dialog>
+
+          <!-- 提交作业弹窗 -->
+          <el-dialog
+            v-model="homeworkSubmitDialogVisible"
+            :title="`提交作业 - ${currentSubmitHomework?.title ?? ''}`"
+            width="560px"
+            append-to-body
+          >
+            <div class="homework-submit-info" v-if="currentSubmitHomework">
+              <p class="homework-submit-desc">{{ currentSubmitHomework.description || '暂无描述' }}</p>
+              <p class="homework-submit-deadline">截止时间：{{ formatHomeworkTime(currentSubmitHomework.deadline) }}</p>
+            </div>
+            <el-input
+              v-model="homeworkSubmitContent"
+              type="textarea"
+              :rows="6"
+              placeholder="请输入作业作答内容..."
+              maxlength="5000"
+              show-word-limit
+            />
+            <template #footer>
+              <el-button @click="homeworkSubmitDialogVisible = false">取消</el-button>
+              <el-button type="primary" :loading="homeworkSubmitting" @click="handleSubmitHomework">提交</el-button>
+            </template>
+          </el-dialog>
+
+
+        </template>
+      </main>
+    </div>
+
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
+import { VideoPlay, Document, Reading, CircleCheckFilled, CircleCloseFilled, SuccessFilled, Edit, Delete, Notebook, ChatDotRound, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { getKnowledgeGraph, getChapterStructure } from '@/api/knowledgeGraph'
+import { getQuestions, submitAnswers, type QuestionItem, type SubmitAnswerResult } from '@/api/question'
+import { getMockQuestions } from '@/api/mockQuestions'
+import type { SubTopicVO, KnowledgePointTreeNode, KnowledgeNode, KnowledgeLink, GraphData, AnswerDetail } from '@/types/knowledgeGraph'
+import type { VideoResource, CoursewareResource } from '@/api/resource'
+import { trackCoursewareAccess } from '@/api/resource'
+import { getNotes, deleteNote, updateNote, getKnowledgePointNotes, type Note } from '@/api/note'
+import { recordStudy } from '@/api/study'
+import { getHomeworkList, submitHomework, type HomeworkVO } from '@/api/homework'
+import { useCourseStore } from '@/stores/course'
+import { useUserStore } from '@/stores/user'
+import KpTreeNode from '@/components/KpTreeNode.vue'
+import KnowledgeGraphChart from '@/components/knowledge-graph/KnowledgeGraphChart.vue'
+import VideoPlayer from '@/components/VideoPlayer.vue'
+import RecommendationsPage from './Recommendations.vue'
+import AssessmentPage from './Assessment.vue'
+import RadarChartPage from './RadarChart.vue'
+
+const route = useRoute()
+const courseId = computed(() => Number(route.params.courseId))
+const courseStore = useCourseStore()
+
+const subTopics = ref<SubTopicVO[]>([])
+const pageLoading = ref(false)
+const loadError = ref(false)
+const expandedChapters = ref<Set<string>>(new Set())
+const selectedKp = ref<KnowledgePointTreeNode | null>(null)
+const selectedKpId = ref<string>('')
+const selectedSubTopic = ref<SubTopicVO | null>(null)
+const activeTab = ref('videos')
+const chapterActiveTab = ref('assessment')
+
+const chapterAssessmentQuestions = ref<AssessmentQuestion[]>([])
+
+// AssessmentPage 需要的题目格式
+interface AssessmentQuestion {
+  id: string
+  type: 'single' | 'multiple' | 'fill' | 'qa'
+  text: string
+  options: { key: string; text: string }[]
+  correctAnswer: string | string[]
+  explanation: string
+  userAnswer?: string | string[]
+}
+
+// 测试相关
+const questions = ref<QuestionItem[]>([])
+const allQuizQuestions = ref<QuestionItem[]>([])
+const quizBatches = ref<QuestionItem[][]>([])
+const currentQuizBatch = ref(0)
+const totalQuizBatches = ref(0)
+const userAnswers = ref<Record<number, string>>({})
+const quizScore = ref<SubmitAnswerResult | null>(null)
+const quizSubmitted = ref(false)
+const submitLoading = ref(false)
+const quizDebug = ref('')
+const currentQIndex = ref(0)
+// 当前题已选中的选项 key（单选/多选统一用数组）
+const selectedAnswers = ref<string[]>([])
+// 当前填空/问答题的文本答案
+const textAnswer = ref('')
+const quizStartTime = ref(0)
+const quizTimeSpent = ref('')
+const showQuizAnalysis = ref(false)
+const showQuizList = ref(true)
+const quizBatchScores = ref<(SubmitAnswerResult[])[]>([])
+const historyDialogBatchIdx = ref<number | null>(null)
+const historyDetailRecord = ref<SubmitAnswerResult | null>(null)
+
+function openHistoryDetail(record: SubmitAnswerResult): void {
+  historyDetailRecord.value = record
+}
+
+// 历史详情弹窗中的题目列表：用当前题库补全旧记录缺失的 content/options/type/analysis
+const historyDetailItems = computed(() => {
+  if (!historyDetailRecord.value?.items) return []
+  return historyDetailRecord.value.items.map((item) => {
+    const q = allQuizQuestions.value.find((qq) => qq.id === item.questionId) as any
+    return {
+      ...item,
+      content: item.content || q?.content || `题目 ${item.questionId}`,
+      options: item.options || q?.options || '',
+      type: item.type || q?.type || 'single',
+      analysis: item.analysis || q?.analysis || '',
+    }
+  })
+})
+
+// 判断当前查看的历史记录是否为旧数据（未保存每道题的作答详情）
+const isHistoryDetailLegacy = computed(() => {
+  if (!historyDetailRecord.value?.items) return true
+  return historyDetailRecord.value.items.some((item) => !item.content && !item.userAnswer)
+})
+
+// 知识点测试记录持久化
+const KP_QUIZ_KEY_PREFIX = 'kp_quiz_scores_'
+
+function getKpQuizKey(): string {
+  return KP_QUIZ_KEY_PREFIX + (selectedKpId.value || '')
+}
+
+function saveKpQuizScores(): void {
+  if (!selectedKpId.value) return
+  localStorage.setItem(getKpQuizKey(), JSON.stringify(quizBatchScores.value))
+}
+
+function loadKpQuizScores(): (SubmitAnswerResult[])[] {
+  try {
+    const raw = localStorage.getItem(getKpQuizKey())
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function batchNumberText(n: number): string {
+  const digits = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
+  if (n <= 10) return digits[n]
+  return String(n)
+}
+
+function latestBatchScore(batchIdx: number): SubmitAnswerResult | null {
+  const arr = quizBatchScores.value[batchIdx]
+  return arr && arr.length > 0 ? arr[arr.length - 1] : null
+}
+
+function showBatchHistory(batchIdx: number) {
+  historyDialogBatchIdx.value = batchIdx
+}
+
+const quizBatchLabel = computed(() => {
+  if (totalQuizBatches.value <= 1) return ''
+  const digits = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
+  const n = currentQuizBatch.value + 1
+  if (n <= 10) return `测试${digits[n]}`
+  if (n < 20) return `测试十${digits[n - 10]}`
+  return `测试${n}`
+})
+
+// 笔记
+const kpNotes = ref<Note[]>([])
+const notesLoading = ref(false)
+const noteEditDialogVisible = ref(false)
+const noteEditContent = ref('')
+const noteEditId = ref<number>(0)
+const noteSaveLoading = ref(false)
+
+// 知识图谱
+const graphRef = ref<InstanceType<typeof KnowledgeGraphChart> | null>(null)
+const graphData = ref<GraphData>({ nodes: [], links: [] })
+const graphLoading = ref(false)
+
+// 视频播放器
+const videoDialogVisible = ref(false)
+const currentVideo = ref<VideoResource | null>(null)
+const pendingSeekTime = ref<number | null>(null)
+const videoPlayerRef = ref<InstanceType<typeof VideoPlayer> | null>(null)
+const showNotePanel = ref(false)
+const activePanel = ref<'note' | 'discussion'>('note')
+
+const courseName = computed(() => {
+  const c = courseStore.getCurrentCourse()
+  return c?.name || '课程详情'
+})
+
+const enrolling = ref(false)
+const isCourseEnrolled = computed(() =>
+  courseStore.myCourses.some((c) => c.id === courseId.value)
+)
+
+async function handleEnrollCourse() {
+  enrolling.value = true
+  try {
+    await courseStore.enrollCourse(courseId.value)
+    ElMessage.success('已加入课程表')
+  } catch {
+    ElMessage.error('加入失败，请重试')
+  } finally {
+    enrolling.value = false
+  }
+}
+
+const unenrolling = ref(false)
+
+async function handleUnenrollCourse() {
+  unenrolling.value = true
+  try {
+    await courseStore.unenrollCourse(courseId.value)
+    ElMessage.success('已移出课程表')
+  } catch {
+    ElMessage.error('移除失败，请重试')
+  } finally {
+    unenrolling.value = false
+  }
+}
+
+// ---- 作业（学生端） ----
+const homeworkList = ref<HomeworkVO[]>([])
+const homeworkLoading = ref(false)
+
+async function loadHomework() {
+  homeworkLoading.value = true
+  try {
+    const data = await getHomeworkList(courseId.value)
+    // 学生端仅展示已发布的作业
+    homeworkList.value = (data ?? []).filter(h => h.status === 'published')
+  } catch {
+    homeworkList.value = []
+  } finally {
+    homeworkLoading.value = false
+  }
+}
+
+const homeworkStatusText: Record<string, string> = {
+  draft: '草稿',
+  published: '已发布',
+  closed: '已截止',
+}
+
+function formatHomeworkTime(value?: string): string {
+  if (!value) return '-'
+  return value.replace('T', ' ').slice(0, 16)
+}
+
+// ---- 作业提交 ----
+const homeworkSubmitDialogVisible = ref(false)
+const homeworkSubmitting = ref(false)
+const currentSubmitHomework = ref<HomeworkVO | null>(null)
+const homeworkSubmitContent = ref('')
+
+function openSubmitHomework(row: HomeworkVO) {
+  currentSubmitHomework.value = row
+  homeworkSubmitContent.value = ''
+  homeworkSubmitDialogVisible.value = true
+}
+
+async function handleSubmitHomework() {
+  if (!currentSubmitHomework.value) return
+  if (!homeworkSubmitContent.value.trim()) {
+    ElMessage.warning('请输入作业作答内容')
+    return
+  }
+  homeworkSubmitting.value = true
+  try {
+    await submitHomework(currentSubmitHomework.value.id, {
+      content: homeworkSubmitContent.value,
+    })
+    ElMessage.success('作业提交成功')
+    homeworkSubmitDialogVisible.value = false
+    loadHomework()
+  } catch (err: any) {
+    const msg = err?.response?.data?.msg || err?.message || '提交失败，请稍后重试'
+    ElMessage.error(msg)
+  } finally {
+    homeworkSubmitting.value = false
+  }
+}
+
+const userId = computed(() => {
+  const userStore = useUserStore()
+  return userStore.userInfo?.id ?? 0
+})
+
+const currentQ = computed(() => questions.value[currentQIndex.value] || null)
+
+const canGoNext = computed(() => {
+  if (!currentQ.value) return false
+  if (isQuizChoiceType(currentQ.value.type)) {
+    return selectedAnswers.value.length > 0
+  }
+  return textAnswer.value.trim().length > 0
+})
+
+const quizProgress = computed(() =>
+  ((currentQIndex.value + 1) / (questions.value.length || 1)) * 100
+)
+
+const quizAccuracy = computed(() =>
+  quizScore.value
+    ? Math.round((quizScore.value.correctCount / quizScore.value.totalQuestions) * 100)
+    : 0
+)
+
+const quizCircumference = computed(() => 2 * Math.PI * 45)
+
+const quizStrokeDashoffset = computed(() => {
+  if (!quizScore.value) return quizCircumference.value
+  const pct = quizScore.value.correctCount / quizScore.value.totalQuestions
+  return quizCircumference.value * (1 - pct)
+})
+
+const quizReviewItems = computed(() => {
+  if (!quizScore.value) return []
+  return quizScore.value.items.map(item => {
+    const q = questions.value.find(q => q.id === item.questionId)
+    return {
+      ...item,
+      content: q?.content || `题目 ${item.questionId}`,
+      options: q?.options || '',
+      userAnswer: userAnswers.value[item.questionId] || '',
+      type: q?.type || 'single',
+      analysis: item.analysis || q?.analysis || '',
+    }
+  })
+})
+
+// 把答案 key（如 "AB"）翻译为 "A.xxx; B.xxx" 形式，便于学生阅读
+function formatAnswerWithOptions(answer: string, optionsRaw: string, fallback: string): string {
+  if (!answer || !answer.trim()) return fallback
+  if (!optionsRaw || !optionsRaw.trim()) return answer
+  const keys = answer.trim().split(/[,，\s]+/).filter(Boolean)
+  // 兼容紧凑写法 'AB' / 'ACD'
+  let normalizedKeys: string[] = keys
+  if (keys.length === 1 && keys[0]!.length > 1) {
+    normalizedKeys = keys[0]!.split('').filter((c) => /[A-Z]/.test(c))
+  }
+  const opts = parseOptions(optionsRaw)
+  if (opts.length === 0) return answer
+  const labels: string[] = []
+  for (const k of normalizedKeys) {
+    const opt = opts.find((o) => o.key === k)
+    if (opt) labels.push(`${opt.key}. ${opt.text}`)
+  }
+  return labels.length > 0 ? labels.join('；') : answer
+}
+
+function getUserAnswerDisplay(item: any): string {
+  if (!item.userAnswer || !item.userAnswer.trim()) return '未作答'
+  if (isQuizChoiceType(item.type)) {
+    return formatAnswerWithOptions(item.userAnswer, item.options, item.userAnswer)
+  }
+  return item.userAnswer
+}
+
+function getCorrectAnswerDisplay(item: any): string {
+  if (!item.correctAnswer || !item.correctAnswer.trim()) return '暂无'
+  if (isQuizChoiceType(item.type)) {
+    return formatAnswerWithOptions(item.correctAnswer, item.options, item.correctAnswer)
+  }
+  return item.correctAnswer
+}
+
+function getAnalysisDisplay(item: any): string {
+  // 优先取 quizReviewItems 已合并的 analysis；若为空则尝试从 question 上取
+  const a = (item.analysis || '').trim()
+  if (a) return a
+  const q = questions.value.find((qq) => qq.id === item.questionId) as any
+  return (q?.analysis || '').trim() || '暂无'
+}
+
+// 判断某选项 key 是否包含在答案字符串中（支持 'A' / 'AB' / 'A,B' / 'A,B,C' 等）
+function isAnswerKeyIncluded(answer: string | undefined, key: string): boolean {
+  if (!answer || !key) return false
+  const raw = answer.trim()
+  const keys = raw.split(/[,，\s]+/).filter(Boolean)
+  // 兼容紧凑写法 'AB' / 'ACD'：拆不出单个 key 时，按字符逐个匹配
+  if (keys.length === 1 && keys[0]!.length > 1) {
+    return keys[0]!.includes(key)
+  }
+  return keys.includes(key)
+}
+
+// 把选项 key 数组规范化为排序后的字符串（'AB' / 'ACD'）
+function normalizeAnswerKeys(keys: string[]): string {
+  return [...keys].sort().join('')
+}
+
+function selectQuizOption(key: string) {
+  const type = currentQ.value?.type
+  if (type === 'single' || type === 'judge') {
+    selectedAnswers.value = [key]
+  } else {
+    const idx = selectedAnswers.value.indexOf(key)
+    if (idx > -1) {
+      selectedAnswers.value.splice(idx, 1)
+    } else {
+      selectedAnswers.value.push(key)
+    }
+  }
+}
+
+function saveCurrentQuizAnswer() {
+  const q = currentQ.value
+  if (!q) return
+  if (isQuizChoiceType(q.type)) {
+    userAnswers.value[q.id] = normalizeAnswerKeys(selectedAnswers.value)
+  } else {
+    userAnswers.value[q.id] = textAnswer.value.trim()
+  }
+}
+
+function restoreQuizAnswer(q?: (typeof questions.value)[number]) {
+  if (!q) {
+    selectedAnswers.value = []
+    textAnswer.value = ''
+    return
+  }
+  if (isQuizChoiceType(q.type)) {
+    selectedAnswers.value = (userAnswers.value[q.id] || '').split('').filter((c) => /[A-Z]/.test(c))
+    textAnswer.value = ''
+  } else {
+    selectedAnswers.value = []
+    textAnswer.value = userAnswers.value[q.id] || ''
+  }
+}
+
+function handleQuizPrev() {
+  if (currentQIndex.value > 0) {
+    saveCurrentQuizAnswer()
+    currentQIndex.value--
+    restoreQuizAnswer(questions.value[currentQIndex.value])
+  }
+}
+
+function handleQuizNext() {
+  if (currentQIndex.value < questions.value.length - 1) {
+    saveCurrentQuizAnswer()
+    currentQIndex.value++
+    restoreQuizAnswer(questions.value[currentQIndex.value])
+  }
+}
+
+function countAllKps(kps: KnowledgePointTreeNode[]): number {
+  let count = kps.length
+  for (const kp of kps) {
+    count += countAllKps(kp.children)
+  }
+  return count
+}
+
+// 从 AnswerDetail 转换为 AssessmentQuestion
+function convertToAssessmentQuestion(q: AnswerDetail, idx: number): AssessmentQuestion {
+  let type: AssessmentQuestion['type'] = 'single'
+  if (q.type === 'multiple') type = 'multiple'
+  else if (q.type === 'fill') type = 'fill'
+  else if (q.type === 'qa') type = 'qa'
+
+  let options: { key: string; text: string }[] = []
+  const raw = q.options
+  if (raw) {
+    try {
+      const rawOptions: string[] = typeof raw === 'string' ? JSON.parse(raw) : raw
+      if (Array.isArray(rawOptions)) {
+        console.log('[ChapterAssessment] rawOptions:', JSON.stringify(rawOptions))
+        options = rawOptions.map((opt: string) => {
+          const match = opt.match(/^([A-Z])[.、．)）\s]+(.+)/)
+          if (match) {
+            const text = match[2]!.trim()
+            // 过滤占位符文本（如"(选项)"）
+            if (!text || text === '(选项)') return { key: match[1]!, text: '' }
+            return { key: match[1]!, text }
+          }
+          return { key: '', text: opt }
+        })
+        // 去掉文本为空的选项
+        options = options.filter(o => o.text)
+        console.log('[ChapterAssessment] filtered options:', JSON.stringify(options))
+      }
+    } catch { /* ignore */ }
+  }
+
+  return {
+    id: `ch-${idx}-${q.id}`,
+    type,
+    text: q.content || '',
+    options,
+    correctAnswer: q.answer || '',
+    explanation: q.analysis || '',
+  }
+}
+
+// 递归收集知识点下所有题目
+function collectQuestionsFromKp(kp: KnowledgePointTreeNode): AnswerDetail[] {
+  let all: AnswerDetail[] = [...(kp.questions || [])]
+  for (const child of kp.children) {
+    all = all.concat(collectQuestionsFromKp(child))
+  }
+  return all
+}
+
+// 收集章节下所有知识点的题目，随机打乱后取前30道
+function collectChapterQuestions(st: SubTopicVO): AssessmentQuestion[] {
+  const allRaw: AnswerDetail[] = []
+  for (const kp of st.knowledgePoints) {
+    allRaw.push(...collectQuestionsFromKp(kp))
+  }
+
+  // 合并统一 mock 题库中该课程的题目（教师在题目管理页新增的题），
+  // 按 id 去重，避免与章节结构内置题目重复。
+  const mockExtra = getMockQuestions(courseId.value).filter(
+    (q) => !allRaw.some((r) => r.id === q.id),
+  )
+  allRaw.push(...mockExtra as unknown as AnswerDetail[])
+
+  if (allRaw.length === 0) return []
+
+  // Fisher-Yates 洗牌
+  const shuffled = [...allRaw]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+
+  const MAX_QUESTIONS = 30
+  const selected = shuffled.slice(0, MAX_QUESTIONS)
+  return selected
+    .map((q, idx) => convertToAssessmentQuestion(q, idx))
+    .filter(q => q.options.length > 0 || q.correctAnswer)
+}
+
+function selectFirstChapterForAssessment() {
+  const first = subTopics.value[0]
+  if (!first) return
+  // 展开所有章节并选中第一个
+  expandedChapters.value.add(first.id)
+  selectedSubTopic.value = first
+  selectedKp.value = null
+  selectedKpId.value = ''
+  chapterAssessmentQuestions.value = collectChapterQuestions(first)
+  chapterActiveTab.value = 'assessment'
+}
+function toggleChapter(id: string) {
+  if (expandedChapters.value.has(id)) {
+    expandedChapters.value.delete(id)
+    selectedSubTopic.value = null
+    chapterAssessmentQuestions.value = []
+  } else {
+    expandedChapters.value.add(id)
+    const st = subTopics.value.find(s => s.id === id) || null
+    selectedSubTopic.value = st
+    selectedKp.value = null
+    selectedKpId.value = ''
+    if (st) {
+      chapterAssessmentQuestions.value = collectChapterQuestions(st)
+    }
+  }
+}
+
+function selectKp(kp: KnowledgePointTreeNode) {
+  selectedKp.value = kp
+  selectedKpId.value = kp.id
+  activeTab.value = 'graph'
+  if (kp.videos.length) activeTab.value = 'videos'
+  else if (kp.coursewares.length) activeTab.value = 'courseware'
+  else if (kp.questions.length) activeTab.value = 'quiz'
+  fetchQuestionsForKp()
+  fetchNotesForKp()
+}
+
+function parseOptions(raw: string) {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      return parsed.map((text, i) => {
+        const clean = String(text).replace(/^[A-Z][.、．)）\s]+/, '').trim()
+        return { key: String.fromCharCode(65 + i), text: clean }
+      })
+    }
+  } catch { /* fall through */ }
+  return raw.split(/[;,]/).filter(Boolean).map((text, i) => ({
+    key: String.fromCharCode(65 + i),
+    text: text.replace(/^[A-Z][.、．)）\s]+/, '').trim(),
+  }))
+}
+
+function questionTypeLabel(type?: string) {
+  if (type === 'single') return '单选题'
+  if (type === 'multiple') return '多选题'
+  if (type === 'judge') return '判断题'
+  if (type === 'fill') return '填空题'
+  if (type === 'qa') return '问答题'
+  return '其他题'
+}
+
+function isQuizChoiceType(type?: string) {
+  return type === 'single' || type === 'multiple' || type === 'judge'
+}
+
+function normalizeText(s: string) {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+/** 填空题判分：按 | 拆分逐空比较，忽略大小写与空白差异 */
+function isQuizFillCorrect(userAnswer: string, correctAnswer: string): boolean {
+  if (!correctAnswer) return false
+  const user = userAnswer.split('|').map(normalizeText)
+  const correct = correctAnswer.split('|').map(normalizeText)
+  return user.length === correct.length && user.every((v, i) => v === correct[i])
+}
+
+function formatDuration(seconds: number | string | null): string {
+  if (!seconds) return ''
+  const numSeconds = typeof seconds === 'string' ? parseInt(seconds) : seconds
+  if (isNaN(numSeconds)) return ''
+  const m = Math.floor(numSeconds / 60)
+  const s = numSeconds % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
+function playVideo(v: VideoResource, seekSeconds?: number) {
+  currentVideo.value = v
+  pendingSeekTime.value = seekSeconds ?? null
+  videoDialogVisible.value = true
+  showNotePanel.value = false
+  activePanel.value = 'note'
+}
+
+// 从笔记时间戳跳转到对应视频时间
+function seekToNoteVideo(note: Note) {
+  const video = selectedKp.value?.videos?.find(v => v.id === note.videoId)
+  if (!video) {
+    ElMessage.warning('找不到关联的视频')
+    return
+  }
+  playVideo(video, note.timestamp)
+}
+
+// 视频打开后跳转到指定时间
+watch([videoDialogVisible, videoPlayerRef], async ([open, playerRef]) => {
+  if (open && playerRef && pendingSeekTime.value !== null) {
+    await nextTick()
+    playerRef.seekToTime(pendingSeekTime.value)
+    pendingSeekTime.value = null
+  }
+})
+
+function getVideoSrc(v: VideoResource): string {
+  return `/api/resources/videos/stream?path=${encodeURIComponent(v.filePath)}`
+}
+
+function handleVideoDialogClose() {
+  currentVideo.value = null
+  pendingSeekTime.value = null
+  showNotePanel.value = false
+  activePanel.value = 'note'
+  fetchNotesForKp()
+}
+
+function toggleNotePanel() {
+  showNotePanel.value = !showNotePanel.value
+}
+
+function openVideoPanel(panel: 'note' | 'discussion') {
+  if (showNotePanel.value && activePanel.value === panel) {
+    showNotePanel.value = false
+  } else {
+    showNotePanel.value = true
+    activePanel.value = panel
+  }
+}
+
+// 视频播放结束，记录学习
+async function handleVideoEnded() {
+  if (!currentVideo.value) return
+  try {
+    await recordStudy(courseId.value, selectedKpId.value)
+  } catch {
+    // 记录失败不阻塞
+  }
+}
+
+function openCourseware(c: CoursewareResource) {
+  trackCoursewareAccess({ knowledgePointId: selectedKpId.value, courseId: courseId.value }).catch(() => {})
+  window.open(`/api/resources/courseware/download?path=${encodeURIComponent(c.filePath)}`, '_blank')
+}
+
+async function fetchChapters() {
+  pageLoading.value = true
+  loadError.value = false
+  try {
+    subTopics.value = await getChapterStructure(courseId.value)
+    if (subTopics.value.length && subTopics.value[0]) {
+      expandedChapters.value.add(subTopics.value[0].id)
+    }
+  } catch {
+    loadError.value = true
+    subTopics.value = []
+  } finally {
+    pageLoading.value = false
+  }
+}
+
+async function fetchGraph() {
+  graphLoading.value = true
+  try {
+    const res = await getKnowledgeGraph(courseId.value)
+    const nodes: KnowledgeNode[] = res.nodes.map((n: any) => ({
+      id: n.id,
+      name: n.name,
+      courseId: n.courseId,
+      group: n.group,
+      level: n.level,
+    }))
+    const links: KnowledgeLink[] = res.links.map((l: any) => ({
+      source: typeof l.source === 'object' ? l.source.id : l.source,
+      target: typeof l.target === 'object' ? l.target.id : l.target,
+      type: l.type || '',
+    }))
+    graphData.value = { nodes, links }
+  } catch {
+    graphData.value = { nodes: [], links: [] }
+  } finally {
+    graphLoading.value = false
+  }
+}
+
+function handleGraphNodeClick(nodeId: string) {
+  const node = graphData.value.nodes.find(n => n.id === nodeId)
+  if (node) {
+    selectedKpId.value = nodeId
+    selectKpFromGraph(node)
+  }
+}
+
+function selectKpFromGraph(node: KnowledgeNode) {
+  // Find the matching KnowledgePointTreeNode in subTopics
+  for (const st of subTopics.value) {
+    for (const kp of st.knowledgePoints) {
+      const found = findKpById(kp, node.id)
+      if (found) {
+        selectedKp.value = found
+        selectedKpId.value = found.id
+        expandedChapters.value.add(st.id)
+        activeTab.value = 'graph'
+        if (found.videos.length) activeTab.value = 'videos'
+        else if (found.coursewares.length) activeTab.value = 'courseware'
+        else if (found.questions.length) activeTab.value = 'quiz'
+        fetchQuestionsForKp()
+        return
+      }
+    }
+  }
+  // Fallback: not found in tree, just navigate visually
+  selectedKp.value = null
+  selectedKpId.value = node.id
+}
+
+function findKpById(kp: KnowledgePointTreeNode, id: string): KnowledgePointTreeNode | null {
+  if (kp.id === id) return kp
+  for (const child of kp.children) {
+    const found = findKpById(child, id)
+    if (found) return found
+  }
+  return null
+}
+
+async function fetchQuestionsForKp() {
+  if (!selectedKp.value) return
+  quizSubmitted.value = false
+  quizScore.value = null
+  quizDebug.value = ''
+  userAnswers.value = {}
+  currentQIndex.value = 0
+  selectedAnswers.value = []
+  showQuizAnalysis.value = false
+  quizStartTime.value = Date.now()
+  currentQuizBatch.value = 0
+
+  // 合并两个来源：章节结构内置题 + 统一 mock 题库中教师新增的题
+  const builtIn = selectedKp.value?.questions ? [...selectedKp.value.questions] : []
+
+  // fallback: API 调用（真实后端就绪后启用）
+  let apiQuestions: QuestionItem[] = []
+  if (builtIn.length === 0) {
+    try {
+      apiQuestions = await getQuestions(courseId.value, userId.value, selectedKpId.value)
+    } catch (err: any) {
+      apiQuestions = []
+      const msg = err?.message || err?.response?.data?.msg || '加载试题失败'
+      ElMessage.error(msg)
+    }
+  }
+
+  // 统一题库中该课程、该知识点下教师新增的题（含 answer / analysis，供客户端判分）
+  const mockExtra = getMockQuestions(courseId.value, selectedKpId.value).filter(
+    (q) => !builtIn.some((r: any) => r.id === q.id) && !apiQuestions.some((r) => r.id === q.id),
+  )
+
+  const merged: any[] = [
+    ...builtIn,
+    ...apiQuestions,
+    ...mockExtra.map((q) => ({
+      id: q.id,
+      type: q.type,
+      content: q.content,
+      options: q.options,
+      answer: q.answer || '',
+      analysis: q.analysis || '',
+      knowledgePointId: q.knowledgePointId || selectedKpId.value,
+    })),
+  ]
+
+  // 过滤无效题目：选择题必须有可解析的选项；填空/问答题不依赖 options
+  const loaded = merged.filter((q) => {
+    if (q.type === 'fill' || q.type === 'qa') return true
+    return parseOptions(q.options || '').length > 0
+  })
+  allQuizQuestions.value = loaded as QuestionItem[]
+  quizBatches.value = splitQuizIntoBatches(loaded)
+  totalQuizBatches.value = quizBatches.value.length
+  quizBatchScores.value = new Array(quizBatches.value.length).fill(null).map(() => [])
+  // 加载已持久化的历史记录
+  const savedScores = loadKpQuizScores()
+  if (savedScores.length === quizBatches.value.length) {
+    quizBatchScores.value = savedScores
+  }
+  showQuizList.value = true
+  questions.value = quizBatches.value[0] || []
+}
+
+/** 将题目按每批30道拆分，总题数<=30不分批 */
+function splitQuizIntoBatches(all: QuestionItem[], batchSize = 30): QuestionItem[][] {
+  if (all.length <= batchSize) return [all]
+  // Fisher-Yates 洗牌打散
+  const shuffled = [...all]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  const batches: QuestionItem[][] = []
+  for (let i = 0; i < shuffled.length; i += batchSize) {
+    batches.push(shuffled.slice(i, i + batchSize))
+  }
+  return batches
+}
+
+/** 从批次列表进入指定批次 */
+function startQuizBatch(idx: number) {
+  currentQuizBatch.value = idx
+  questions.value = quizBatches.value[idx]
+  showQuizList.value = false
+  quizSubmitted.value = false
+  quizScore.value = null
+  quizDebug.value = ''
+  userAnswers.value = {}
+  currentQIndex.value = 0
+  selectedAnswers.value = []
+  textAnswer.value = ''
+  showQuizAnalysis.value = false
+  quizStartTime.value = Date.now()
+}
+
+/** 返回批次列表 */
+function goToQuizList() {
+  showQuizList.value = true
+  quizSubmitted.value = false
+  quizScore.value = null
+  currentQIndex.value = 0
+  selectedAnswers.value = []
+  textAnswer.value = ''
+  showQuizAnalysis.value = false
+}
+
+async function submitQuiz() {
+  if (!selectedKp.value || submitLoading.value) return
+
+  // 保存最后一题答案
+  saveCurrentQuizAnswer()
+
+  submitLoading.value = true
+
+  // 如果是 mock 数据（带 answer 字段），客户端判分
+  const mockQuestion = questions.value[0] as any
+  if (mockQuestion?.answer !== undefined) {
+    const results: SubmitAnswerResult['items'] = []
+    let correctCount = 0
+    for (const q of questions.value) {
+      const qq = q as any
+      const type = qq.type
+      const userAns = (userAnswers.value[q.id] || '').trim()
+      const correctAns = String(qq.answer || '').trim()
+      let isCorrect = false
+      if (type === 'fill') {
+        isCorrect = isQuizFillCorrect(userAns, correctAns)
+      } else if (type === 'qa') {
+        // 问答题为开放性题目：有内容即算作答，不强制与参考答案完全一致
+        isCorrect = userAns.length > 0
+      } else {
+        // 单选/多选/判断
+        const u = normalizeAnswerKeys(userAns.split('').filter((c) => /[A-Z]/.test(c)))
+        const c = normalizeAnswerKeys(correctAns.split('').filter((x) => /[A-Z]/.test(x)))
+        isCorrect = u === c
+      }
+      if (isCorrect) correctCount++
+      results.push({
+        questionId: q.id,
+        isCorrect,
+        correctAnswer: qq.answer || '',
+        analysis: qq.analysis || '',
+        userAnswer: userAns,
+        content: qq.content || '',
+        options: qq.options || '',
+        type: type || 'single',
+      })
+    }
+    quizScore.value = { totalQuestions: questions.value.length, correctCount, items: results }
+    quizSubmitted.value = true
+    const elapsed = Date.now() - quizStartTime.value
+    const sec = Math.floor(elapsed / 1000)
+    quizTimeSpent.value = sec >= 60 ? `${Math.floor(sec / 60)}分${sec % 60}秒` : `${sec}秒`
+    ElMessage.success(`提交成功！${correctCount}/${questions.value.length} 题正确`)
+    quizBatchScores.value[currentQuizBatch.value].push(quizScore.value!)
+    saveKpQuizScores()
+    submitLoading.value = false
+    return
+  }
+
+  // 否则走 API 提交
+  const payload = {
+    userId: userId.value,
+    courseId: courseId.value,
+    answers: questions.value.map((q) => ({
+      questionId: q.id,
+      knowledgePointId: q.knowledgePointId,
+      answer: userAnswers.value[q.id] || '',
+    }))
+  }
+
+  try {
+    const result = await submitAnswers(payload)
+
+    if (!result || result.totalQuestions == null) {
+      const errMsg = '服务端返回数据异常，请稍后重试'
+      console.error('[submitQuiz] 校验失败:', { result, hasResult: !!result, totalQuestions: result?.totalQuestions })
+      ElMessage.error(errMsg)
+      quizDebug.value = errMsg
+      return
+    }
+
+    quizDebug.value = ''
+    await nextTick()
+    // 补全每道题的作答与题目元数据，便于历史记录详情展示
+    const questionMap = new Map(questions.value.map((q) => [q.id, q as any]))
+    quizScore.value = {
+      ...result,
+      items: result.items.map((item) => {
+        const q = questionMap.get(item.questionId)
+        return {
+          ...item,
+          userAnswer: userAnswers.value[item.questionId] || '',
+          content: q?.content || '',
+          options: q?.options || '',
+          type: q?.type || 'single',
+        }
+      }),
+    }
+    quizSubmitted.value = true
+    const elapsed = Date.now() - quizStartTime.value
+    const sec = Math.floor(elapsed / 1000)
+    quizTimeSpent.value = sec >= 60 ? `${Math.floor(sec / 60)}分${sec % 60}秒` : `${sec}秒`
+    await nextTick()
+    ElMessage.success(`提交成功！${result.correctCount}/${result.totalQuestions} 题正确`)
+    quizBatchScores.value[currentQuizBatch.value].push(result)
+    saveKpQuizScores()
+  } catch (err: any) {
+    console.error('[submitQuiz] 异常:', err)
+    const msg = err?.message || err?.response?.data?.msg || '提交失败，请检查网络后重试'
+    ElMessage.error(msg)
+    quizDebug.value = '异常: ' + (err?.message || err?.response?.data?.msg || '未知错误')
+  } finally {
+    submitLoading.value = false
+  }
+}
+
+function restartQuiz() {
+  quizSubmitted.value = false
+  quizScore.value = null
+  quizDebug.value = ''
+  userAnswers.value = {}
+  currentQIndex.value = 0
+  selectedAnswers.value = []
+  textAnswer.value = ''
+  showQuizAnalysis.value = false
+  if (quizBatches.value[currentQuizBatch.value]) {
+    questions.value = quizBatches.value[currentQuizBatch.value]
+  } else {
+    fetchQuestionsForKp()
+  }
+}
+
+async function fetchNotesForKp() {
+  if (!selectedKpId.value) return
+  notesLoading.value = true
+  try {
+    kpNotes.value = await getKnowledgePointNotes(selectedKpId.value)
+  } catch {
+    kpNotes.value = []
+  } finally {
+    notesLoading.value = false
+  }
+}
+
+function formatTime(seconds: number): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = Math.floor(seconds % 60)
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  }
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
+function editKpNote(note: Note) {
+  noteEditId.value = note.id
+  noteEditContent.value = note.content
+  noteEditDialogVisible.value = true
+}
+
+async function saveKpNote() {
+  noteSaveLoading.value = true
+  try {
+    await updateNote({ id: noteEditId.value, content: noteEditContent.value })
+    const idx = kpNotes.value.findIndex(n => n.id === noteEditId.value)
+    if (idx !== -1) kpNotes.value[idx].content = noteEditContent.value
+    noteEditDialogVisible.value = false
+    ElMessage.success('笔记已更新')
+  } catch {
+    ElMessage.error('更新失败')
+  } finally {
+    noteSaveLoading.value = false
+  }
+}
+
+async function handleDeleteKpNote(id: number) {
+  try {
+    await deleteNote(id)
+    kpNotes.value = kpNotes.value.filter(n => n.id !== id)
+    ElMessage.success('已删除')
+  } catch {
+    ElMessage.error('删除失败')
+  }
+}
+
+onMounted(async () => {
+  if (!courseStore.getCurrentCourse()) {
+    await courseStore.fetchMyCourses()
+  }
+  await fetchChapters()
+  await fetchGraph()
+  loadHomework()
+
+  // 处理路由参数：Tab 切换
+  const tabParam = route.query.tab as string
+  if (tabParam) {
+    activeTab.value = tabParam
+  }
+
+  // 处理知识点定位（来自搜索结果跳转）
+  const kpId = route.query.knowledgePointId as string
+  if (kpId && subTopics.value.length) {
+    await nextTick()
+    // 查找并选中知识点
+    for (const st of subTopics.value) {
+      let found: KnowledgePointTreeNode | null = null
+      for (const kp of st.knowledgePoints) {
+        found = findKpById(kp, kpId)
+        if (found) break
+      }
+      if (found) {
+        expandedChapters.value.add(st.id)
+        selectedKp.value = found
+        selectedKpId.value = found.id
+        await nextTick()
+        fetchQuestionsForKp()
+        break
+      }
+    }
+
+    // 处理知识图谱节点高亮定位（放在知识点选中之后，确保图谱组件已渲染）
+    const highlightNodeId = route.query.highlight as string
+    if (highlightNodeId) {
+      await nextTick()
+      const highlightNodeName = (route.query.nodeName as string) || ''
+      graphRef.value?.highlightNode?.(highlightNodeName || selectedKp.value?.name || '')
+      graphRef.value?.centerOnNodeById?.(highlightNodeId)
+      graphRef.value?.flashNode?.(highlightNodeId)
+    }
+
+    // 处理视频自动播放
+    const videoIdParam = route.query.videoId as string
+    if (videoIdParam && selectedKp.value) {
+      activeTab.value = 'videos'
+      await nextTick()
+      const vid = selectedKp.value.videos?.find(v => String(v.id) === videoIdParam)
+      if (vid) {
+        playVideo(vid)
+      }
+    }
+  }
+})
+</script>
+
+
+<style scoped>
+.course-detail { height: calc(100vh - 60px); display: flex; flex-direction: column; overflow: hidden; }
+
+.course-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: #fff;
+  border-bottom: 1px solid #e4e7ed;
+  flex-shrink: 0;
+}
+
+.course-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.main-layout { flex: 1; display: flex; overflow: hidden; }
+
+.chapter-sidebar {
+  width: 280px;
+  background: #fff;
+  border-right: 1px solid #e4e7ed;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chapter-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.sidebar-title {
+  padding: 16px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.error-hint, .empty-hint {
+  padding: 24px;
+  text-align: center;
+  color: #909399;
+}
+
+.chapter-group {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.chapter-header {
+  padding: 12px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s;
+}
+
+.chapter-header:hover {
+  background: #f5f7fa;
+}
+
+.chapter-header.expanded {
+  background: #f0f7ff;
+}
+
+.arrow-icon {
+  font-size: 12px;
+  color: #909399;
+}
+
+.chapter-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.chapter-count {
+  font-size: 12px;
+  color: #909399;
+}
+
+.kp-tree {
+  padding: 8px 0 8px 24px;
+  background: #fafafa;
+}
+
+.resource-panel {
+  flex: 1;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #909399;
+  gap: 16px;
+}
+
+.start-assessment-btn {
+  margin-top: 8px;
+}
+
+.kp-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.kp-header h2 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.kp-desc {
+  margin: 0;
+  font-size: 14px;
+  color: #606266;
+}
+
+.resource-tabs {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.resource-tabs :deep(.el-tabs__header) {
+  margin: 0;
+  padding: 0 24px;
+  background: #f5f7fa;
+}
+
+.resource-tabs :deep(.el-tabs__content) {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.graph-tab-container {
+  flex: 1;
+  position: relative;
+}
+
+.resource-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.resource-card {
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.resource-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.video-preview, .courseware-icon {
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f7fa;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card-body .title {
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-body .meta {
+  font-size: 12px;
+  color: #909399;
+}
+
+.embedded-page {
+  height: 100%;
+}
+
+.embedded-qa {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.embedded-homework {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 测试批次列表 */
+.quiz-batch-list {
+  padding: 20px 0;
+}
+.quiz-batch-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.quiz-batch-list-header h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.quiz-batch-list-total {
+  color: #909399;
+  font-size: 14px;
+}
+.quiz-batch-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.quiz-batch-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  background: #fff;
+  transition: border-color 0.2s;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.quiz-batch-card:hover {
+  border-color: #409eff;
+}
+.batch-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+.batch-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 140px;
+}
+.batch-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+.batch-count {
+  font-size: 13px;
+  color: #909399;
+}
+.batch-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.batch-status {
+  font-size: 13px;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.batch-status.done {
+  color: #67c23a;
+  background: #f0f9eb;
+}
+.batch-status.pending {
+  color: #e6a23c;
+  background: #fdf6ec;
+}
+.batch-score {
+  font-size: 13px;
+  color: #606266;
+}
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.batch-go-btn {
+  flex-shrink: 0;
+  margin-left: 16px;
+}
+
+/* 批次历史记录（弹窗内使用） */
+.history-title {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #303133;
+}
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid #ebeef5;
+  font-size: 13px;
+}
+.history-item:last-child {
+  border-bottom: none;
+}
+.history-index {
+  color: #909399;
+  min-width: 50px;
+}
+.history-score {
+  color: #606266;
+  min-width: 90px;
+}
+.history-pct {
+  color: #409eff;
+  font-weight: 600;
+  min-width: 45px;
+}
+.history-score-val {
+  color: #67c23a;
+  font-weight: 600;
+}
+.history-item-clickable {
+  cursor: pointer;
+  transition: background-color 0.2s;
+  padding: 10px 12px;
+  margin: 0 -12px;
+  border-radius: 6px;
+}
+.history-item-clickable:hover {
+  background-color: #f5f7fa;
+}
+.history-chevron {
+  margin-left: auto;
+  color: #c0c4cc;
+}
+
+/* 历史记录详情 */
+.history-detail-summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+.history-detail-score {
+  color: #606266;
+}
+.history-detail-pct {
+  color: #409eff;
+  font-weight: 600;
+}
+.history-detail-val {
+  color: #67c23a;
+  font-weight: 600;
+}
+.history-detail-empty {
+  padding: 24px;
+  text-align: center;
+  color: #909399;
+  font-size: 14px;
+}
+.history-detail-section {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+.history-detail-legacy-alert {
+  margin-bottom: 16px;
+}
+
+/* 返回链接 */
+.quiz-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: #409eff;
+  cursor: pointer;
+  user-select: none;
+}
+.quiz-back-link:hover {
+  color: #66b1ff;
+}
+
+/* 测试样式 */
+.quiz-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.quiz-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.quiz-nav-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.quiz-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.quiz-counter {
+  font-size: 14px;
+  color: #606266;
+}
+
+.quiz-progress-bar {
+  width: 200px;
+}
+
+.quiz-question-card {
+  background: #fff;
+  padding: 32px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.quiz-question-type {
+  margin-bottom: 16px;
+}
+
+.quiz-question-text {
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0 0 24px 0;
+}
+
+.quiz-option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.quiz-option-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 2px solid #e4e7ed;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quiz-option-item:hover {
+  border-color: #409eff;
+  background: #f0f7ff;
+}
+
+.quiz-option-item.option-selected {
+  border-color: #409eff;
+  background: #ecf5ff;
+}
+
+.quiz-option-key {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #f5f7fa;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.quiz-option-item.option-selected .quiz-option-key {
+  background: #409eff;
+  color: #fff;
+}
+
+.quiz-option-text {
+  flex: 1;
+  font-size: 14px;
+}
+
+.quiz-nav-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* 填空/问答题作答区 */
+.quiz-text-answer-area {
+  margin-bottom: 24px;
+}
+
+.quiz-text-answer-label {
+  font-size: 14px;
+  color: #606266;
+  margin-bottom: 10px;
+}
+
+/* 解析区共用样式：所有题型的"你的答案 / 正确答案"灰色框 */
+.quiz-text-analysis {
+  background: #f5f7fa;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.quiz-text-analysis-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.quiz-text-analysis-label {
+  color: #909399;
+  white-space: nowrap;
+}
+
+.quiz-text-analysis-value {
+  word-break: break-all;
+}
+
+.text-correct {
+  color: #67c23a;
+  font-weight: 500;
+}
+
+.text-wrong {
+  color: #f56c6c;
+  font-weight: 500;
+}
+
+.quiz-text-analysis-tip {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #e6a23c;
+}
+
+/* 测试结果样式 */
+.quiz-result-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.quiz-result-card {
+  background: #fff;
+  padding: 32px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.quiz-result-header {
+  margin-bottom: 24px;
+}
+
+.quiz-result-icon {
+  margin-bottom: 16px;
+}
+
+.quiz-result-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.quiz-result-score {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 32px;
+  margin-bottom: 24px;
+}
+
+.score-ring {
+  position: relative;
+  width: 120px;
+  height: 120px;
+}
+
+.score-ring-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.score-ring-bg {
+  fill: none;
+  stroke: #f5f7fa;
+  stroke-width: 8;
+}
+
+.score-ring-progress {
+  fill: none;
+  stroke: #67c23a;
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.5s;
+}
+
+.score-ring-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.score-ring-number {
+  font-size: 24px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.score-ring-total {
+  font-size: 12px;
+  color: #909399;
+}
+
+.score-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.score-summary-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.score-summary-label {
+  font-size: 14px;
+  color: #606266;
+}
+
+.score-summary-value {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.score-summary-value.accuracy {
+  color: #67c23a;
+}
+
+.quiz-result-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+/* 测试解析样式 */
+.quiz-analysis-section {
+  margin-top: 24px;
+}
+
+.quiz-analysis-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+}
+
+.quiz-analysis-card {
+  background: #fff;
+  padding: 24px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 16px;
+}
+
+.quiz-analysis-question-header {
+  margin-bottom: 16px;
+}
+
+.quiz-analysis-question-text {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.quiz-analysis-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.quiz-analysis-opt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.quiz-analysis-opt .quiz-option-key {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #f5f7fa;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.quiz-analysis-opt .quiz-option-key.opt-correct {
+  background: #67c23a;
+  color: #fff;
+}
+
+.quiz-analysis-opt .quiz-option-key.opt-wrong {
+  background: #f56c6c;
+  color: #fff;
+}
+
+.quiz-analysis-opt-text {
+  flex: 1;
+  font-size: 14px;
+}
+
+.quiz-analysis-opt-text.text-correct {
+  color: #67c23a;
+  font-weight: 500;
+}
+
+.quiz-analysis-opt-text.text-wrong {
+  color: #f56c6c;
+}
+
+.opt-icon-correct {
+  color: #67c23a;
+}
+
+.opt-icon-wrong {
+  color: #f56c6c;
+}
+
+.quiz-analysis-explanation {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #606266;
+  line-height: 1.7;
+}
+
+.quiz-analysis-explanation-label {
+  color: #909399;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.quiz-analysis-explanation-text {
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+/* 视频播放器对话框样式 */
+.video-dialog-content {
+  height: 70vh;
+}
+
+:deep(.el-dialog__body) {
+  padding: 0;
+}
+
+.video-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.video-dialog-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 笔记相关 */
+.kp-notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.kp-note-card {
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  transition: box-shadow 0.3s;
+}
+
+.kp-note-card:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.kp-note-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.kp-note-card-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.kp-note-card-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #303133;
+  margin-bottom: 8px;
+}
+
+.kp-note-card-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.kp-note-meta {
+  font-size: 12px;
+  color: #909399;
+}
+
+.note-timestamp-tag {
+  cursor: pointer;
+}
+
+</style>
