@@ -62,6 +62,11 @@ const router = createRouter({
           component: () => import('@/views/CourseDetail.vue'),
         },
         {
+          path: 'course/:courseId/recommend',
+          name: 'CourseRecommend',
+          component: () => import('@/views/CourseRecommend.vue'),
+        },
+        {
           path: 'notes',
           name: 'NotesManagement',
           component: () => import('@/views/NotesManagement.vue'),
@@ -127,6 +132,36 @@ const router = createRouter({
           path: 'students',
           name: 'TeacherStudents',
           component: () => import('@/views/teacher/TeacherStudents.vue'),
+        },
+        {
+          path: 'course-students',
+          name: 'TeacherCourseStudents',
+          component: () => import('@/views/teacher/TeacherCourseStudents.vue'),
+        },
+        {
+          path: 'class-overview',
+          name: 'TeacherClassOverview',
+          component: () => import('@/views/teacher/TeacherClassOverview.vue'),
+        },
+        {
+          path: 'student-learning-data',
+          name: 'TeacherStudentLearningData',
+          component: () => import('@/views/teacher/TeacherStudentLearningData.vue'),
+        },
+        {
+          path: 'warnings',
+          name: 'TeacherWarnings',
+          component: () => import('@/views/teacher/TeacherWarnings.vue'),
+        },
+        {
+          path: 'student-diagnosis',
+          name: 'TeacherStudentDiagnosis',
+          component: () => import('@/views/teacher/TeacherStudentDiagnosis.vue'),
+        },
+        {
+          path: 'student/:id',
+          name: 'TeacherStudentHome',
+          component: () => import('@/views/teacher/TeacherStudentHome.vue'),
         },
         {
           path: 'homework',

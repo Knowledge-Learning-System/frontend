@@ -139,6 +139,17 @@
               </div>
               <span class="mastery-label">掌握度</span>
             </div>
+
+            <!-- 功能2：原因分析（图谱缺陷链溯源） -->
+            <div v-if="(traceMap[point.id] || []).length" class="point-reason">
+              <span class="reason-title">
+                <el-icon><Connection /></el-icon>
+                原因分析
+              </span>
+              <span class="reason-text">
+                前置知识点「{{ (traceMap[point.id] || []).join('」→「') }}」尚未掌握，建议先补齐缺陷链再巩固本知识点
+              </span>
+            </div>
           </div>
           
           <div class="point-actions">
@@ -165,14 +176,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  ArrowLeft, Aim, Clock, DataLine, Document, Folder, RefreshRight,
+  ArrowLeft, Aim, Clock, Connection, DataLine, Document, Folder, RefreshRight,
   Search, TrendCharts, VideoPlay, WarningFilled,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { getWeakPoints } from '@/api/study'
+import { getWeakPoints, getWeaknessTrace } from '@/api/study'
 import { useCourseStore } from '@/stores/course'
 import { useUserStore } from '@/stores/user'
 
@@ -182,6 +193,13 @@ interface WeakPoint {
   mastery: number
   totalAttempts: number
   errorCount: number
+}
+
+interface WeaknessChain {
+  id: string
+  name: string
+  mastery: number
+  chainNames: string[]
 }
 
 const router = useRouter()
@@ -194,6 +212,23 @@ const sortBy = ref('mastery_asc')
 const loading = ref(false)
 
 const allPoints = ref<WeakPoint[]>([])
+// 功能2：知识点 id → 图谱缺陷链（前置未掌握知识点名称序列）
+const traceMap = ref<Record<string, string[]>>({})
+
+const loadTrace = async () => {
+  const course = courseStore.getCurrentCourse()
+  if (!course) return
+  try {
+    const chains = await getWeaknessTrace(course.id)
+    const map: Record<string, string[]> = {}
+    ;(chains || []).forEach(c => {
+      if (c && c.id && c.chainNames?.length) map[c.id] = c.chainNames
+    })
+    traceMap.value = map
+  } catch {
+    // 溯源接口异常时保持无原因分析展示，不阻塞薄弱点列表
+  }
+}
 
 const loadData = async () => {
   const course = courseStore.getCurrentCourse()
@@ -209,10 +244,17 @@ const loadData = async () => {
   } finally {
     loading.value = false
   }
+  loadTrace()
 }
 
 onMounted(() => {
   loadData()
+  // 功能1：答题提交后自动刷新薄弱点列表与原因分析
+  window.addEventListener('mastery-refresh', loadData)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('mastery-refresh', loadData)
 })
 
 const weakPoints = computed(() => {
@@ -560,6 +602,32 @@ const handleLocateInGraph = (point: WeakPoint) => {
   font-size: 13px;
   color: #909399;
   min-width: 45px;
+}
+
+/* 原因分析（缺陷链溯源） */
+.point-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: #fdf6ec;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.reason-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #e6a23c;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.reason-text {
+  color: #606266;
 }
 
 .point-actions {

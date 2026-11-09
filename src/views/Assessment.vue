@@ -335,6 +335,7 @@ import {
   ArrowLeft, CircleCheckFilled, CircleCloseFilled, Document, SuccessFilled,
 } from '@element-plus/icons-vue'
 import { getQuestions, submitAnswers } from '@/api/question'
+import { recordStudyTime } from '@/api/study'
 import { useCourseStore } from '@/stores/course'
 import { useUserStore } from '@/stores/user'
 
@@ -641,6 +642,13 @@ const handleSubmit = async () => {
       })
       correctCount.value = result.correctCount ?? 0
       score.value = correctCount.value * 3
+      // 功能1：答题提交成功后广播掌握度刷新事件，掌握度页/雷达图自动拉取最新数据，无需手动刷新
+      window.dispatchEvent(new CustomEvent('mastery-refresh'))
+      // 功能3：上报本次答题学习时长（累计秒），落库 user_behavior action=study_time
+      const elapsedSeconds = Math.max(1, Math.floor((Date.now() - startTime.value) / 1000))
+      recordStudyTime(elapsedSeconds, nodeId.value || undefined).catch(() => {
+        // 时长上报失败不影响答题流程
+      })
     } catch (err: any) {
       ElMessage.error(err?.message || err?.response?.data?.msg || '答案提交失败，请重试')
       submitting.value = false

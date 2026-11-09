@@ -97,6 +97,11 @@
           </template>
         </template>
       </el-alert>
+      <div v-if="(importResult.chaptersGenerated || 0) > 0" class="chapter-tip">
+        已根据图谱内容自动生成 <strong>{{ importResult.chaptersGenerated }}</strong> 个章节，并将
+        <strong>{{ importResult.knowledgePointsAttached || 0 }}</strong> 个知识点归属到章节；
+        可前往「课程管理 → 上传资料」，在对应章节知识点下发布教学资源。
+      </div>
       <div v-if="importResult.failDetails.length > 0" class="fail-details">
         <div class="fail-title">失败明细</div>
         <ul class="fail-list">
@@ -248,7 +253,10 @@ const handleImport = async () => {
     if (result.failCount > 0) {
       ElMessage.warning(`导入完成，但有 ${result.failCount} 条失败`)
     } else {
-      ElMessage.success('导入成功，图谱已更新')
+      const chapterTip = result.chaptersGenerated
+        ? `，已自动生成 ${result.chaptersGenerated} 个章节`
+        : ''
+      ElMessage.success(`导入成功，图谱已更新${chapterTip}`)
     }
     await loadGraph()
   } catch (e: any) {
@@ -375,6 +383,17 @@ onMounted(async () => {
 
 .result-section .el-alert {
   margin-bottom: 8px;
+}
+
+.chapter-tip {
+  margin-top: 8px;
+  padding: 12px 16px;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #389e0d;
+  line-height: 1.8;
 }
 
 .fail-details {

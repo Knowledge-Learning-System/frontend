@@ -140,13 +140,20 @@
         </el-form-item>
         <el-form-item label="关联知识点" prop="knowledgePointId">
           <div class="kp-picker-wrap">
-            <KnowledgeTreePicker
-              v-model="questionForm.knowledgePointId"
-              :course-id="selectedCourseId"
-              placeholder-when-empty
-              @select="handleKpSelect"
-            />
+            <template v-if="questionForm.knowledgePointId">
+              <el-tag size="small" type="primary" closable @close="clearKp">
+                {{ kpLabel(questionForm.knowledgePointId) }}
+              </el-tag>
+              <el-button link type="primary" @click="kpDialogVisible = true">重新关联</el-button>
+            </template>
+            <el-button v-else link type="primary" @click="kpDialogVisible = true">+ 关联知识点</el-button>
           </div>
+          <KnowledgeNodePickerDialog
+            v-model:visible="kpDialogVisible"
+            :course-id="selectedCourseId"
+            :model-value="questionForm.knowledgePointId"
+            @confirm="handleKpConfirm"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -165,8 +172,8 @@ import type { Course } from '@/types/course'
 import { useUserStore } from '@/stores/user'
 import { getMyTeachingCourses, listQuestions, addQuestion, updateQuestion, deleteQuestion } from '@/api/teacher'
 import type { TeacherQuestion, QuestionPayload } from '@/api/teacher'
-import KnowledgeTreePicker from '@/components/KnowledgeTreePicker.vue'
-import type { KpTreeNode } from '@/components/KnowledgeTreePicker.vue'
+import KnowledgeNodePickerDialog from '@/components/KnowledgeNodePickerDialog.vue'
+import type { KpNodeOption } from '@/components/KnowledgeNodePickerDialog.vue'
 
 type QuestionType = 'single' | 'multiple' | 'fill' | 'qa'
 
@@ -247,8 +254,15 @@ const optionSummary = (row: TeacherQuestion) => {
 // 知识点 ID → 名称映射（从树选择时收集，用于列表展示）
 const kpLabels = ref<Record<string, string>>({})
 
-const handleKpSelect = (node: KpTreeNode) => {
+const kpDialogVisible = ref(false)
+
+const handleKpConfirm = (node: KpNodeOption) => {
+  questionForm.knowledgePointId = node.id
   if (node.id) kpLabels.value[node.id] = node.label
+}
+
+const clearKp = () => {
+  questionForm.knowledgePointId = ''
 }
 
 const kpLabel = (id?: string) => {

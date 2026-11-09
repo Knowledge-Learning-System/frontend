@@ -55,7 +55,7 @@
         <el-form-item label="选择章节">
           <div class="chapter-picker">
             <el-tree
-              v-if="uploadForm.courseId"
+              v-if="uploadForm.courseId && chapterTreeData.length > 0"
               ref="chapterTreeRef"
               :data="chapterTreeData"
               :props="{ label: 'label', children: 'children' }"
@@ -65,6 +65,11 @@
               :expand-on-click-node="false"
               class="chapter-tree"
               @node-click="handleNodeClick"
+            />
+            <el-empty
+              v-else-if="uploadForm.courseId"
+              description="该课程暂无章节：请先在「图谱管理」上传本课程的知识图谱，系统会自动生成章节与知识点"
+              :image-size="60"
             />
             <el-empty v-else description="请先选择课程" :image-size="60" />
             <div v-if="selectedNode" class="chapter-selected">

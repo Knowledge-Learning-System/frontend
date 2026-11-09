@@ -98,11 +98,16 @@
         </template>
         <template v-else>
           <div class="kp-header">
-            <h2>{{ selectedKp?.name }}</h2>
+            <div class="kp-header-main">
+              <h2>{{ selectedKp?.name }}</h2>
+              <el-button type="primary" size="small" class="kp-diagnosis-btn" @click="goCourseRecommend">
+                查看该课程推荐
+              </el-button>
+            </div>
             <p v-if="selectedKp?.description" class="kp-desc">{{ selectedKp?.description }}</p>
           </div>
 
-          <el-tabs v-model="activeTab" class="resource-tabs" lazy @tab-click="handleTabClick">
+          <el-tabs v-model="activeTab" class="resource-tabs" lazy>
             <!-- 知识图谱 -->
             <el-tab-pane label="知识图谱" name="graph">
               <div class="graph-tab-container" v-loading="graphLoading">
@@ -522,14 +527,14 @@
             <!-- 推荐 -->
             <el-tab-pane label="推荐" name="recommend">
               <div class="embedded-page">
-                <RecommendationsPage embedded />
+                <RecommendationsPage embedded :kp-id="selectedKpId" :kp-name="selectedKp?.name || ''" />
               </div>
             </el-tab-pane>
 
             <!-- 诊断 -->
             <el-tab-pane label="诊断" name="diagnosis">
               <div class="embedded-page">
-                <RadarChartPage embedded :course-id="courseId" />
+                <RadarChartPage embedded :course-id="courseId" :knowledge-point-id="selectedKpId" />
               </div>
             </el-tab-pane>
 
@@ -669,7 +674,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { VideoPlay, Document, Reading, CircleCheckFilled, CircleCloseFilled, SuccessFilled, Edit, Delete, Notebook, ChatDotRound, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getKnowledgeGraph, getChapterStructure } from '@/api/knowledgeGraph'
@@ -691,6 +696,7 @@ import AssessmentPage from './Assessment.vue'
 import RadarChartPage from './RadarChart.vue'
 
 const route = useRoute()
+const router = useRouter()
 const courseId = computed(() => Number(route.params.courseId))
 const courseStore = useCourseStore()
 
@@ -1210,6 +1216,11 @@ function toggleChapter(id: string) {
   }
 }
 
+// 课程级入口：跳转到独立页面查看整门课的算法推荐，不再占用知识点内页
+function goCourseRecommend() {
+  router.push({ name: 'CourseRecommend', params: { courseId: courseId.value } })
+}
+
 function selectKp(kp: KnowledgePointTreeNode) {
   selectedKp.value = kp
   selectedKpId.value = kp.id
@@ -1377,6 +1388,47 @@ async function fetchGraph() {
   } finally {
     graphLoading.value = false
   }
+}
+
+/**
+ * 图谱节点定位：切到知识图谱 tab 后高亮、居中、闪烁目标节点。
+ * 图谱 tab 为懒加载，首次切入时需等 ECharts 初始化与力导向布局完成再执行定位。
+ */
+function locateGraphNode(nodeId: string, nodeName: string, switchTab = true) {
+  if (!nodeId) return
+  if (switchTab) activeTab.value = 'graph'
+  setTimeout(() => {
+    graphRef.value?.highlightNode?.(nodeName)
+    graphRef.value?.centerOnNodeById?.(nodeId)
+    graphRef.value?.flashNode?.(nodeId)
+  }, 350)
+}
+
+/** 推荐页「定位」：内嵌模式下由 Recommendations 组件事件触发（同一路由只变 query 不会重跑 onMounted） */
+function handleRecommendLocate(payload: { id: string; name: string }) {
+  if (!payload?.id) return
+
+  // 选中章节树中对应的知识点，让侧边栏同步展开定位
+  for (const st of subTopics.value) {
+    let hit: KnowledgePointTreeNode | null = null
+    for (const kp of st.knowledgePoints) {
+      hit = findKpById(kp, payload.id)
+      if (hit) break
+    }
+    if (hit) {
+      expandedChapters.value.add(st.id)
+      selectedKp.value = hit
+      selectedKpId.value = hit.id
+      fetchQuestionsForKp()
+      break
+    }
+  }
+  // 章节树里找不到时仍按知识点 id 定位图谱节点
+  if (!selectedKp.value || selectedKp.value.id !== payload.id) {
+    selectedKpId.value = payload.id
+  }
+
+  locateGraphNode(payload.id, payload.name)
 }
 
 function handleGraphNodeClick(nodeId: string) {
@@ -1741,16 +1793,6 @@ onMounted(async () => {
       }
     }
 
-    // 处理知识图谱节点高亮定位（放在知识点选中之后，确保图谱组件已渲染）
-    const highlightNodeId = route.query.highlight as string
-    if (highlightNodeId) {
-      await nextTick()
-      const highlightNodeName = (route.query.nodeName as string) || ''
-      graphRef.value?.highlightNode?.(highlightNodeName || selectedKp.value?.name || '')
-      graphRef.value?.centerOnNodeById?.(highlightNodeId)
-      graphRef.value?.flashNode?.(highlightNodeId)
-    }
-
     // 处理视频自动播放
     const videoIdParam = route.query.videoId as string
     if (videoIdParam && selectedKp.value) {
@@ -1761,6 +1803,14 @@ onMounted(async () => {
         playVideo(vid)
       }
     }
+  }
+
+  // 知识图谱节点定位（入口可能只带 highlight、不带 knowledgePointId，需独立于上面的知识点选中流程）
+  // 此处不强制切 tab：路由 tab 参数已在前文生效，避免覆盖 videoId 触发的视频 tab
+  const highlightNodeId = route.query.highlight as string
+  if (highlightNodeId) {
+    const highlightNodeName = (route.query.nodeName as string) || selectedKp.value?.name || ''
+    locateGraphNode(highlightNodeId, highlightNodeName, false)
   }
 })
 </script>
@@ -1885,10 +1935,23 @@ onMounted(async () => {
   border-bottom: 1px solid #e4e7ed;
 }
 
-.kp-header h2 {
-  margin: 0 0 8px 0;
+.kp-header-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.kp-header-main h2 {
+  margin: 0;
   font-size: 20px;
   font-weight: 600;
+  min-width: 0;
+  word-break: break-all;
+}
+
+.kp-diagnosis-btn {
+  flex-shrink: 0;
 }
 
 .kp-desc {

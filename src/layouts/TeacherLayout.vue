@@ -31,6 +31,26 @@
           <el-icon><User /></el-icon>
           <template #title>学生管理</template>
         </el-menu-item>
+        <el-menu-item index="/teacher/course-students">
+          <el-icon><List /></el-icon>
+          <template #title>选课学生</template>
+        </el-menu-item>
+        <el-menu-item index="/teacher/class-overview">
+          <el-icon><DataAnalysis /></el-icon>
+          <template #title>班级学情</template>
+        </el-menu-item>
+        <el-menu-item index="/teacher/student-learning-data">
+          <el-icon><TrendCharts /></el-icon>
+          <template #title>学习数据</template>
+        </el-menu-item>
+        <el-menu-item index="/teacher/warnings">
+          <el-icon><Warning /></el-icon>
+          <template #title>预警学生</template>
+        </el-menu-item>
+        <el-menu-item index="/teacher/student-diagnosis">
+          <el-icon><DocumentChecked /></el-icon>
+          <template #title>诊断报告</template>
+        </el-menu-item>
         <el-menu-item index="/teacher/homework">
           <el-icon><Document /></el-icon>
           <template #title>作业管理</template>
@@ -113,6 +133,11 @@ const pageTitleMap: Record<string, string> = {
   '/teacher/hall': '课程大厅',
   '/teacher/courses': '课程管理',
   '/teacher/students': '学生管理',
+  '/teacher/course-students': '选课学生',
+  '/teacher/class-overview': '班级学情',
+  '/teacher/student-learning-data': '学生学习数据',
+  '/teacher/warnings': '预警学生',
+  '/teacher/student-diagnosis': '学生诊断报告',
   '/teacher/homework': '作业管理',
   '/teacher/questions': '题目管理',
   '/teacher/graph': '图谱管理',

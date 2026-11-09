@@ -8,6 +8,22 @@ export interface RadarItem {
   mastery: number
 }
 
+/** 诊断分析维度：整体掌握度 / 按知识领域（章节） / 按时间趋势 */
+export type RadarDimension = 'overall' | 'by_domain' | 'by_time'
+
+/** 掌握度时间趋势上的一个数据点（按自然日） */
+export interface TrendPoint {
+  date: string
+  /** 截至当日的累计掌握度 0-100 */
+  mastery: number
+  /** 当日答题数 */
+  totalAttempts: number
+  /** 当日答对数 */
+  correctAttempts: number
+  /** 当日正确率 0-100 */
+  accuracy: number
+}
+
 export interface WeakPointItem {
   id: string
   name: string
@@ -57,6 +73,25 @@ const mockRadarData: RadarItem[] = [
   { id: 'kp-3-2', name: '单元测试', mastery: 60 },
   { id: 'kp-4-1', name: '集成测试', mastery: 35 },
   { id: 'kp-4-2', name: '项目管理', mastery: 42 },
+]
+
+// 按知识领域（章节）聚合的 mock 数据
+const mockDomainRadarData: RadarItem[] = [
+  { id: 'ch-1', name: '软件工程概述', mastery: 69 },
+  { id: 'ch-2', name: '需求与设计', mastery: 52 },
+  { id: 'ch-3', name: '编码与测试', mastery: 70 },
+  { id: 'ch-4', name: '项目管理', mastery: 39 },
+]
+
+// 时间趋势 mock 数据（近 7 天）
+const mockTrendData: TrendPoint[] = [
+  { date: '2026-11-03', mastery: 48, totalAttempts: 6, correctAttempts: 3, accuracy: 50 },
+  { date: '2026-11-04', mastery: 51, totalAttempts: 9, correctAttempts: 5, accuracy: 56 },
+  { date: '2026-11-05', mastery: 53, totalAttempts: 4, correctAttempts: 2, accuracy: 50 },
+  { date: '2026-11-06', mastery: 57, totalAttempts: 11, correctAttempts: 7, accuracy: 64 },
+  { date: '2026-11-07', mastery: 59, totalAttempts: 0, correctAttempts: 0, accuracy: 0 },
+  { date: '2026-11-08', mastery: 61, totalAttempts: 8, correctAttempts: 6, accuracy: 75 },
+  { date: '2026-11-09', mastery: 62, totalAttempts: 5, correctAttempts: 3, accuracy: 60 },
 ]
 
 const mockWeakPointsData: WeakPointItem[] = [
@@ -188,13 +223,28 @@ const mockRemindersData: Reminder[] = [
 ]
 
 // --- API ---
-export const getRadar = async (userId: number, courseId: number) => {
+export const getRadar = async (
+  userId: number,
+  courseId: number,
+  dimension: RadarDimension = 'overall',
+) => {
   if (USE_MOCK) {
     await delay(300)
-    return mockRadarData
+    return dimension === 'by_domain' ? mockDomainRadarData : mockRadarData
   }
   return request.get<RadarItem[], RadarItem[]>('/diagnosis/radar', {
-    params: { userId, courseId },
+    params: { userId, courseId, dimension },
+  })
+}
+
+/** 掌握度时间趋势：按自然日返回每日答题量与截至当日的累计掌握度 */
+export const getMasteryTrend = async (userId: number, courseId: number, days = 30) => {
+  if (USE_MOCK) {
+    await delay(300)
+    return mockTrendData
+  }
+  return request.get<TrendPoint[], TrendPoint[]>('/diagnosis/trend', {
+    params: { userId, courseId, days },
   })
 }
 
@@ -208,13 +258,39 @@ export const getWeakPoints = async (userId: number, courseId: number) => {
   })
 }
 
-export const getRecommendations = async (userId: number, courseId: number) => {
+// ===== 大模型分析建议（诊断页底部卡片） =====
+export interface AiAnalysis {
+  /** 总体判断 */
+  overview: string
+  /** 掌握较好的部分 */
+  strengths: string[]
+  /** 需要重点关注的薄弱环节 */
+  weaknesses: string[]
+  /** 下一步学习建议 */
+  suggestions: string[]
+  /** 掌握度变化趋势点评 */
+  trend: string
+  /** 是否命中服务端缓存 */
+  cached: boolean
+  /** 生成时间 yyyy-MM-dd HH:mm */
+  generatedAt: string
+}
+
+/** 大模型分析建议：服务端会缓存 10 分钟，模型响应较慢故放宽超时 */
+export const getAiAnalysis = async (userId: number, courseId: number, days = 30) => {
+  return request.get<AiAnalysis, AiAnalysis>('/diagnosis/ai-analysis', {
+    params: { userId, courseId, days },
+    timeout: 60000,
+  })
+}
+
+export const getRecommendations = async (userId: number, courseId: number, kpId?: string) => {
   if (USE_MOCK) {
     await delay(300)
     return await generateSmartRecommendations()
   }
   return request.get<Recommendation[], Recommendation[]>('/study/recommendations', {
-    params: { userId, courseId },
+    params: kpId ? { userId, courseId, kpId } : { userId, courseId },
   })
 }
 
@@ -230,6 +306,39 @@ export const getStudyPlan = async (userId: number, courseId: number) => {
   )
 }
 
+// ===== 完整学习计划（基于知识图谱拓扑序） =====
+export interface StudyPlanStep {
+  order: number
+  kpId: string
+  name: string
+  description: string
+  group: number
+  mastery: number
+  completed: boolean
+  prerequisites: string[]
+  prerequisiteNames: string[]
+}
+
+export interface FullStudyPlan {
+  courseId: number
+  courseName: string
+  totalSteps: number
+  completedSteps: number
+  completionRate: number
+  estimatedDays: number
+  steps: StudyPlanStep[]
+}
+
+export const getFullStudyPlan = async (courseId: number) => {
+  return request.get<FullStudyPlan, FullStudyPlan>('/study/full-plan', {
+    params: { courseId },
+  })
+}
+
+export const completePlanStep = (courseId: number, kpId: string, completed: boolean) => {
+  return request.post('/study/plan/complete', { courseId, kpId, completed })
+}
+
 export const getReminders = async (userId: number, courseId: number) => {
   return request.get<Reminder[], Reminder[]>('/study/reminders', {
     params: { userId, courseId },
@@ -240,6 +349,42 @@ export const getActiveDays = async (userId: number) => {
   return request.get<{ activeDays: number }, { activeDays: number }>('/users/active-days', {
     params: { userId },
   })
+}
+
+// ===== 薄弱点原因分析（功能2-接通图谱缺陷链溯源） =====
+export interface WeaknessChain {
+  id: string
+  name: string
+  mastery: number
+  chainNames: string[]
+}
+
+export const getWeaknessTrace = async (courseId: number) => {
+  return request.get<WeaknessChain[], WeaknessChain[]>('/diagnosis/graph/weakness/trace', {
+    params: { courseId },
+  })
+}
+
+// ===== 学习统计真实链路 & 学习时长（功能3） =====
+export interface StudentOverview {
+  totalQuestions: number
+  accuracy: number
+  kpCount: number
+  totalStudySeconds: number
+  courseProgress: number
+  masteryDistribution: { name: string; value: number }[]
+  dailyTrend: { label: string; total: number; correct: number }[]
+  kpStats: { kpId: string; kpName: string; total: number; correct: number; rate: number }[]
+}
+
+export const getStudentOverview = async (userId: number, courseId: number) => {
+  return request.get<StudentOverview, StudentOverview>('/statistics/student/overview', {
+    params: { userId, courseId },
+  })
+}
+
+export const recordStudyTime = (durationSeconds: number, knowledgePointId?: string) => {
+  return request.post('/study/time', { durationSeconds, knowledgePointId })
 }
 
 // ===== 学习计划 CRUD =====

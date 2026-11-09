@@ -111,6 +111,31 @@ export const importStudents = (file: File, courseId?: number) => {
   return request.post<ImportStudentResult, ImportStudentResult>('/users/import', formData)
 }
 
+/** 下载学生批量导入模板 — GET /users/import-template */
+export const downloadStudentImportTemplate = async (fileName = '学生导入模板.xlsx') => {
+  const blob = await request.get<Blob, Blob>('/users/import-template', {
+    responseType: 'blob',
+  })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+/** 编辑学生信息 — PUT /users/{id}，仅可修改姓名 nickname */
+export const updateStudent = (id: number, nickname: string) => {
+  return request.put<void, void>(`/users/${id}`, { nickname })
+}
+
+/** 删除学生 — DELETE /users/{id}（后端连带清理选课关联） */
+export const deleteStudent = (id: number) => {
+  return request.delete<void, void>(`/users/${id}`)
+}
+
 /** 题目列表 — GET /questions?courseId=&userId= */
 export const listQuestions = (courseId: number, userId: number) => {
   if (USE_MOCK_QUESTIONS) {

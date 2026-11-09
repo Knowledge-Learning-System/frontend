@@ -1,143 +1,25 @@
 <template>
   <div ref="containerRef" class="kg-chart">
-    <svg
-      ref="svgRef"
-      class="kg-svg"
-      :width="svgSize.width"
-      :height="svgSize.height"
-      @wheel.prevent="handleWheel"
-      @mousedown="handleSvgMouseDown"
-    >
-      <defs>
-        <filter id="glow-active">
-          <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#1890ff" flood-opacity="0.8" />
-        </filter>
-        <filter id="glow-hover">
-          <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#fff" flood-opacity="0.8" />
-        </filter>
-        <marker
-          id="arrowhead"
-          viewBox="0 0 10 8"
-          refX="10"
-          refY="4"
-          markerWidth="8"
-          markerHeight="6"
-          orient="auto"
-        >
-          <path d="M0,0 L10,4 L0,8 Z" fill="#bae6fd" />
-        </marker>
-      </defs>
+    <div ref="chartRef" class="kg-canvas" @contextmenu.prevent></div>
 
-      <g :transform="zoomTransform">
-        <!-- Links -->
-        <g class="links">
-          <line
-            v-for="link in layoutLinks"
-            :key="`${link.source}-${link.target}`"
-            :x1="link.x1"
-            :y1="link.y1"
-            :x2="link.x2"
-            :y2="link.y2"
-            :stroke="getLinkStroke(link)"
-            :stroke-width="getLinkStrokeWidth(link)"
-            :stroke-opacity="getLinkOpacity(link)"
-            :stroke-dasharray="getLinkDash(link)"
-            :marker-end="link.type === 'PARENT_KP' ? 'url(#arrowhead)' : undefined"
-          />
-        </g>
-
-        <!-- Nodes -->
-        <g
-          v-for="node in layoutNodes"
-          :key="node.id"
-          class="node-group"
-          :class="{
-            'node-flash': flashingNodeIds.has(node.id),
-            'path-node': isPathNode(node.id),
-            'non-path-node': isNonPathNode(node.id),
-            'search-dim': isSearchDimNode(node.id),
-          }"
-          :style="{ cursor: 'pointer' }"
-          :transform="`translate(${node.x}, ${node.y})`"
-          @click.stop="handleNodeClick(node, $event)"
-          @dblclick.stop="handleNodeDblClick(node.id, $event)"
-          @mouseover="handleNodeMouseOver(node, $event)"
-          @mouseout="handleNodeMouseOut"
-        >
-          <circle
-            class="node-circle"
-            :r="getNodeRadius(node)"
-            :fill="getNodeFill(node)"
-            fill-opacity="0.25"
-            :stroke="getNodeStroke(node)"
-            :stroke-width="getNodeStrokeWidth(node)"
-            :stroke-opacity="getNodeStrokeOpacity(node)"
-            :filter="getNodeFilter(node)"
-          />
-          <text
-            class="node-label"
-            :dy="node.group === 0 ? 50 : 42"
-            text-anchor="middle"
-            :fill="getLabelFill(node)"
-            font-size="14px"
-            :font-weight="node.group === 0 ? 600 : 400"
-          >{{ truncateName(node.name) }}</text>
-          <!-- Expand/Collapse indicator -->
-          <g v-if="hasChildrenMap.get(node.id)?.length" class="expand-indicator" @click.stop="handleIndicatorClick(node.id)">
-            <!-- 增大透明点击区域 -->
-            <circle
-              :cy="-(getNodeRadius(node) + 12)"
-              r="14"
-              fill="transparent"
-              stroke="none"
-            />
-            <circle
-              :cy="-(getNodeRadius(node) + 12)"
-              r="9"
-              fill="#fff"
-              stroke="#8c8c8c"
-              stroke-width="1.5"
-            />
-            <text
-              :y="-(getNodeRadius(node) + 12) + 4"
-              text-anchor="middle"
-              font-size="12"
-              fill="#595959"
-              font-weight="bold"
-              pointer-events="none"
-            >{{ expandedNodes.has(node.id) ? '−' : '+' }}</text>
-          </g>
-        </g>
-      </g>
-    </svg>
-
-    <!-- Tooltip -->
-    <div
-      v-if="tooltip.visible"
-      class="node-tooltip"
-      :style="{ left: tooltip.left + 'px', top: tooltip.top + 'px' }"
-    >
-      <div class="tooltip-name">{{ tooltip.name }}</div>
-      <div v-if="tooltip.desc" class="tooltip-desc">{{ tooltip.desc }}</div>
+    <!-- 关系图例 -->
+    <div v-if="legendItems.length" class="kg-legend">
+      <div v-for="item in legendItems" :key="item.label" class="kg-legend-item">
+        <i class="kg-legend-line" :class="item.lineClass"></i>
+        <span>{{ item.label }}</span>
+      </div>
     </div>
+
+    <!-- 操作提示 -->
+    <div class="kg-hint">滚轮缩放 · 拖拽平移 · 单击展开/收起 · 右键收起 · 双击进入课程</div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import type { KnowledgeNode, KnowledgeLink } from '@/types/knowledgeGraph'
-import {
-  forceSimulation,
-  forceLink,
-  forceManyBody,
-  forceCollide,
-  forceCenter,
-  forceX,
-  forceY,
-  type Simulation,
-  type SimulationNodeDatum,
-  type SimulationLinkDatum,
-} from 'd3-force'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import * as echarts from 'echarts'
+import type { EChartsOption } from 'echarts'
+import type { KnowledgeLink, KnowledgeNode } from '@/types/knowledgeGraph'
 
 // ── Props & Emits ──
 const props = defineProps<{
@@ -152,122 +34,138 @@ const emit = defineEmits<{
 }>()
 
 // ── Template Refs ──
-const svgRef = ref<SVGSVGElement | null>(null)
 const containerRef = ref<HTMLDivElement | null>(null)
+const chartRef = ref<HTMLDivElement | null>(null)
 
-// ── Constants ──
-const groupColors: Record<number, string> = {
-  0: '#f97316',
-  1: '#52c41a',
-  2: '#722ed1',
-  3: '#faad14',
-  4: '#13c2c2',
-  5: '#eb2f96',
-  6: '#2f54eb',
-  7: '#a0d911',
-}
-const DEFAULT_COLOR = '#a0d911'
-const getColor = (group: number): string => groupColors[group] ?? DEFAULT_COLOR
-
-// ── Force-driven layout config ──
-const FORCE = {
-  linkDistance: 110, // 默认边长（PREREQUISITE 略长、PARENT_KP 略短）
-  linkStrength: 0.4, // 弹簧强度
-  chargeStrength: -340, // 排斥力
-  collidePadding: 10, // 碰撞间隔
-  centerStrength: 0.06, // 向心约束，防止整图漂移
-}
-const getBaseRadius = (group: number): number => (group === 0 ? 35 : 28)
-const MIN_ZOOM = 0.2
-const MAX_ZOOM = 3
-
-// ── SVG Size ──
-const svgSize = reactive({ width: 800, height: 600 })
-
-// ── Zoom State ──
-const zoom = reactive({ x: 0, y: 0, scale: 1 })
-const zoomTransform = computed(() => `translate(${zoom.x}, ${zoom.y}) scale(${zoom.scale})`)
-
-// ── Drag state ──
-let isDragging = false
-let dragStart = { x: 0, y: 0 }
-let dragZoomStart = { x: 0, y: 0 }
-
-// ── Core State ──
-const expandedNodes = ref(new Set<string>())
-const nodePositions = ref<Record<string, { x: number; y: number }>>({})
-const activeNodeId = ref<string | null>(null)
-const hoverNodeId = ref<string | null>(null)
-let activeTimeout: ReturnType<typeof setTimeout> | null = null
-
-// ── Force simulation state ──
-interface ForceNode extends SimulationNodeDatum {
-  id: string
-  name: string
-  group: number
-  level?: number
-  description?: string
-  radius: number
-}
-interface ForceLink extends SimulationLinkDatum<ForceNode> {
-  source: string | ForceNode
-  target: string | ForceNode
-  type: string
-}
-let simulation: Simulation<ForceNode, ForceLink> | null = null
+let chartInstance: echarts.ECharts | null = null
+let resizeObserver: ResizeObserver | null = null
+let resizeTimer: ReturnType<typeof setTimeout> | null = null
+let flashTimer: ReturnType<typeof setInterval> | null = null
+let centerTimer: ReturnType<typeof setTimeout> | null = null
 let fitTimer: ReturnType<typeof setTimeout> | null = null
 
-// ── Tooltip ──
-const tooltip = ref({
-  visible: false,
-  name: '',
-  desc: '',
-  left: 0,
-  top: 0,
-})
-
-// ── Highlight / Path / Flash State ──
-const searchKeyword = ref('')
-const learningPathNodeIds = ref<Set<string>>(new Set())
-const learningPathEdgeSet = ref<Set<string>>(new Set())
-const flashingNodeIds = ref<Set<string>>(new Set())
-
-// ── Computed: parsed links, maps ──
-interface TypedLink {
-  source: string
-  target: string
-  type: string
+// ── 配色 ──
+const GROUP_COLORS: Record<number, string> = {
+  0: '#ff7a45',
+  1: '#36cfc9',
+  2: '#597ef7',
+  3: '#b37feb',
+  4: '#ffc53d',
+  5: '#ff85c0',
+  6: '#73d13d',
+  7: '#40a9ff',
 }
+const DEFAULT_COLOR = '#8fa3bf'
 
-const parsedLinks = computed<TypedLink[]>(() =>
-  props.data.links.map(l => ({ source: l.source, target: l.target, type: l.type || '' }))
-)
+const getColor = (group: number): string => GROUP_COLORS[group] ?? DEFAULT_COLOR
+
+type LinkMeta = { label: string; color: string; dashed: boolean }
+
+const LINK_META: Record<string, LinkMeta> = {
+  PARENT_KP: { label: '层级关系', color: '#4dabf7', dashed: false },
+  PREREQUISITE: { label: '前置依赖', color: '#94a3b8', dashed: true },
+  BELONGS_TO: { label: '归属关系', color: '#a78bfa', dashed: true },
+  HAS_SUBTOPIC: { label: '归属关系', color: '#a78bfa', dashed: true },
+  PART_OF: { label: '归属关系', color: '#a78bfa', dashed: true },
+}
+const DEFAULT_LINK_META: LinkMeta = { label: '关联关系', color: '#cbd5e1', dashed: false }
+
+const getLinkMeta = (type: string): LinkMeta => LINK_META[type] ?? DEFAULT_LINK_META
 
 // 层级父子关系：PARENT_KP / BELONGS_TO（知识点归属树）+ HAS_SUBTOPIC（知识域→子主题）+ PART_OF（子主题→知识点）
 const isParentLink = (type: string): boolean =>
   type === 'PARENT_KP' || type === 'BELONGS_TO' || type === 'HAS_SUBTOPIC' || type === 'PART_OF'
 
-const childrenMap = computed(() => {
-  const map = new Map<string, string[]>()
-  for (const l of parsedLinks.value) {
-    if (isParentLink(l.type)) {
-      if (!map.has(l.source)) map.set(l.source, [])
-      map.get(l.source)!.push(l.target)
-    }
-  }
-  return map
-})
+const MIN_ZOOM = 0.3
+const MAX_ZOOM = 3
 
-const hasChildrenMap = computed(() => {
-  const set = new Map<string, string[]>()
-  for (const l of parsedLinks.value) {
-    if (isParentLink(l.type)) {
-      if (!set.has(l.source)) set.set(l.source, [])
-      set.get(l.source)!.push(l.target)
-    }
+// ECharts 内部结构的最小类型声明（用于读取力布局坐标 / 当前缩放）
+interface GraphSeriesInternal {
+  preservedPoints?: Record<string, number[]>
+  getData?: () => {
+    getItemLayout?: (index: number) => number[] | number[][] | undefined
   }
-  return set
-})
+}
+interface GraphModelInternal {
+  getSeriesByIndex?: (index: number) => GraphSeriesInternal | undefined
+}
+interface ChartInternal {
+  getModel?: () => GraphModelInternal | undefined
+}
+interface TooltipParams {
+  dataType?: string
+  data?: {
+    relType?: string
+    sourceName?: string
+    targetName?: string
+    name?: string
+    desc?: string
+    group?: number
+    kpId?: string
+  }
+}
+interface SeriesSnapshot {
+  zoom?: number
+}
+interface GraphEventParams {
+  dataType?: string
+  data?: unknown
+}
+interface GraphNodeEventData {
+  kpId?: string
+}
+
+// ── 颜色工具 ──
+function withAlpha(hex: string, alpha: number): string {
+  const normalized = hex.replace('#', '')
+  const r = parseInt(normalized.slice(0, 2), 16)
+  const g = parseInt(normalized.slice(2, 4), 16)
+  const b = parseInt(normalized.slice(4, 6), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+function mixWithWhite(hex: string, ratio: number): string {
+  const normalized = hex.replace('#', '')
+  const mix = (channel: number) => Math.round(channel + (255 - channel) * ratio)
+  const r = mix(parseInt(normalized.slice(0, 2), 16))
+  const g = mix(parseInt(normalized.slice(2, 4), 16))
+  const b = mix(parseInt(normalized.slice(4, 6), 16))
+  return `rgb(${r}, ${g}, ${b})`
+}
+
+function makeRadialColor(hex: string, strong: boolean): Record<string, unknown> {
+  return {
+    type: 'radial',
+    x: 0.35,
+    y: 0.3,
+    r: 0.85,
+    colorStops: [
+      { offset: 0, color: mixWithWhite(hex, strong ? 0.6 : 0.5) },
+      { offset: 0.65, color: hex },
+      { offset: 1, color: withAlpha(hex, 0.85) },
+    ],
+  }
+}
+
+// ── 面包屑式 HTML 转义（tooltip 内使用） ──
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+// ── 核心状态 ──
+const expandedNodes = ref(new Set<string>())
+const searchKeyword = ref('')
+const learningPathNodeIds = ref(new Set<string>())
+const learningPathEdgeSet = ref(new Set<string>())
+
+// ── Computed：解析后的链接与映射 ──
+const parsedLinks = computed(() =>
+  props.data.links.map(l => ({ source: l.source, target: l.target, type: l.type || '' }))
+)
 
 const nodeMap = computed(() => {
   const map = new Map<string, KnowledgeNode>()
@@ -275,21 +173,40 @@ const nodeMap = computed(() => {
   return map
 })
 
-// ── Computed: visibility ──
+const childrenMap = computed(() => {
+  const map = new Map<string, string[]>()
+  for (const l of parsedLinks.value) {
+    if (!isParentLink(l.type)) continue
+    if (!map.has(l.source)) map.set(l.source, [])
+    map.get(l.source)!.push(l.target)
+  }
+  return map
+})
+
+const parentMap = computed(() => {
+  const map = new Map<string, string>()
+  for (const l of parsedLinks.value) {
+    if (!isParentLink(l.type)) continue
+    if (!map.has(l.target)) map.set(l.target, l.source)
+  }
+  return map
+})
+
+// ── Computed：可见节点 / 链接 ──
 const visibleNodeIds = computed(() => {
   const allLinks = parsedLinks.value
   const expanded = expandedNodes.value
   const set = new Set<string>()
 
-  // Root: group=0 nodes
+  // 根节点：group=0；若没有 group=0，则回退为「没有被 PARENT_KP 指向」的节点
   const roots = props.data.nodes.filter(n => n.group === 0).map(n => n.id)
-
-  // Fallback: if no group=0, use nodes not targeted by PARENT_KP
   const rootIds =
     roots.length > 0
       ? roots
       : (() => {
-          const targeted = new Set(allLinks.filter(l => l.type === 'PARENT_KP').map(l => l.target))
+          const targeted = new Set(
+            allLinks.filter(l => l.type === 'PARENT_KP').map(l => l.target)
+          )
           return props.data.nodes.filter(n => !targeted.has(n.id)).map(n => n.id)
         })()
 
@@ -301,9 +218,8 @@ const visibleNodeIds = computed(() => {
     if (set.has(current)) continue
     set.add(current)
     if (expanded.has(current)) {
-      const children = cm.get(current) || []
-      for (const c of children) {
-        if (!set.has(c)) queue.push(c)
+      for (const child of cm.get(current) || []) {
+        if (!set.has(child)) queue.push(child)
       }
     }
   }
@@ -311,9 +227,7 @@ const visibleNodeIds = computed(() => {
   return set
 })
 
-const visibleNodes = computed(() =>
-  props.data.nodes.filter(n => visibleNodeIds.value.has(n.id))
-)
+const visibleNodes = computed(() => props.data.nodes.filter(n => visibleNodeIds.value.has(n.id)))
 
 const visibleLinks = computed(() =>
   parsedLinks.value.filter(
@@ -321,396 +235,503 @@ const visibleLinks = computed(() =>
   )
 )
 
-// ── Computed: layout nodes with positions ──
-const layoutNodes = computed(() =>
-  visibleNodes.value.map(n => ({
-    ...n,
-    x: nodePositions.value[n.id]?.x ?? 0,
-    y: nodePositions.value[n.id]?.y ?? 0,
-  }))
-)
+const legendItems = computed(() => {
+  const types = new Set(parsedLinks.value.map(l => l.type))
+  const items: Array<{ label: string; lineClass: string }> = []
+  if (types.has('PARENT_KP')) {
+    items.push({ label: '层级关系', lineClass: 'line-solid' })
+  }
+  if (types.has('PREREQUISITE')) {
+    items.push({ label: '前置依赖', lineClass: 'line-dashed' })
+  }
+  if (types.has('BELONGS_TO') || types.has('HAS_SUBTOPIC') || types.has('PART_OF')) {
+    items.push({ label: '归属关系', lineClass: 'line-dotted' })
+  }
+  return items
+})
 
-const layoutLinks = computed(() =>
-  visibleLinks.value.map(l => ({
-    ...l,
-    x1: nodePositions.value[l.source]?.x ?? 0,
-    y1: nodePositions.value[l.source]?.y ?? 0,
-    x2: nodePositions.value[l.target]?.x ?? 0,
-    y2: nodePositions.value[l.target]?.y ?? 0,
-  }))
-)
-
-// ── Computed: search highlights ──
+// ── 状态判断 ──
+const isPathNode = (nodeId: string): boolean => learningPathNodeIds.value.has(nodeId)
+const isNonPathNode = (nodeId: string): boolean =>
+  learningPathNodeIds.value.size > 0 && !learningPathNodeIds.value.has(nodeId)
 const isSearchDimNode = (nodeId: string): boolean => {
   if (!searchKeyword.value) return false
-  // Only dim if no learning path is active and keyword doesn't match
   if (learningPathNodeIds.value.size > 0) return false
   const node = nodeMap.value.get(nodeId)
   if (!node) return false
-  const lower = searchKeyword.value.toLowerCase()
-  return !node.name.toLowerCase().includes(lower)
+  return !node.name.toLowerCase().includes(searchKeyword.value.toLowerCase())
 }
+const isDimmed = (nodeId: string): boolean => isNonPathNode(nodeId) || isSearchDimNode(nodeId)
 
-// ── Computed: learning path ──
-const isPathNode = (nodeId: string): boolean => learningPathNodeIds.value.has(nodeId)
-const isNonPathNode = (nodeId: string): boolean => {
-  return learningPathNodeIds.value.size > 0 && !learningPathNodeIds.value.has(nodeId)
-}
+const edgeKey = (source: string, target: string): string => `${source}->${target}`
+const isPathEdge = (link: { source: string; target: string }): boolean =>
+  learningPathEdgeSet.value.has(edgeKey(link.source, link.target))
 
-// ── Link styling ──
-const getLinkStroke = (link: TypedLink): string => {
-  const key = `${link.source}->${link.target}`
-  if (learningPathEdgeSet.value.has(key)) return '#1890ff'
-  if (link.type === 'PARENT_KP') return '#bae6fd'
-  if (link.type === 'PREREQUISITE') return '#8c8c8c'
-  return '#bfbfbf'
-}
-
-const getLinkStrokeWidth = (link: TypedLink): number => {
-  const key = `${link.source}->${link.target}`
-  if (learningPathEdgeSet.value.has(key)) return 3
-  return link.type === 'PARENT_KP' ? 2 : 1.2
-}
-
-const getLinkOpacity = (link: TypedLink): number => {
-  if (learningPathNodeIds.value.size > 0) {
-    const key = `${link.source}->${link.target}`
-    return learningPathEdgeSet.value.has(key) ? 0.85 : 0.25
-  }
-  return link.type === 'PARENT_KP' ? 0.6 : 0.5
-}
-
-const getLinkDash = (link: TypedLink): string | undefined => {
-  if (link.type === 'PREREQUISITE') return '6,3'
-  if (link.type === 'BELONGS_TO') return '4,6'
-  return undefined
-}
-
-// ── Node styling ──
-const getNodeRadius = (node: KnowledgeNode): number => {
-  let r = node.group === 0 ? 35 : 28
-  if (activeNodeId.value === node.id) r *= 1.5
-  else if (hoverNodeId.value === node.id) r *= 1.2
-  return r
-}
-
-const getNodeFill = (node: KnowledgeNode): string => getColor(node.group)
-const getNodeStroke = (node: KnowledgeNode): string => {
-  if (isPathNode(node.id)) return '#1890ff'
-  return getColor(node.group)
-}
-const getNodeStrokeWidth = (node: KnowledgeNode): number => {
-  if (isPathNode(node.id)) return 3
-  return 2
-}
-const getNodeStrokeOpacity = (node: KnowledgeNode): number => {
-  if (isNonPathNode(node.id)) return 0.2
-  return 0.85
-}
-const getNodeFilter = (node: KnowledgeNode): string => {
-  if (activeNodeId.value === node.id) return 'url(#glow-active)'
-  if (hoverNodeId.value === node.id) return 'url(#glow-hover)'
-  return 'none'
-}
-const getLabelFill = (node: KnowledgeNode): string => {
-  if (isPathNode(node.id)) return '#1890ff'
-  if (isNonPathNode(node.id)) return '#bfbfbf'
-  if (isSearchDimNode(node.id)) return '#bfbfbf'
-  return '#262626'
-}
-const truncateName = (name: string): string => (name.length > 8 ? name.slice(0, 8) + '...' : name)
-
-// ── Force simulation ──
-function stopSimulation() {
-  if (simulation) {
-    // 先移除监听再停止，避免旧实例触发 fitToContent
-    simulation.on('tick', null)
-    simulation.on('end', null)
-    simulation.stop()
-    simulation = null
-  }
-  if (fitTimer) {
-    clearTimeout(fitTimer)
-    fitTimer = null
-  }
-}
-
-function linkDistance(l: ForceLink): number {
-  const base = FORCE.linkDistance
-  if (l.type === 'PREREQUISITE') return base * 1.4
-  if (l.type === 'PARENT_KP') return base * 0.9
-  return base
-}
-
-/**
- * 以当前可见节点/链接集合重建 d3-force 力模拟。
- * 可见集合变化（展开/收起/数据替换/容器 resize）时调用：
- * 增删 sim 节点、更新 links，并保留旧坐标热启动。
- */
-function buildSimulation() {
-  stopSimulation()
-
-  const nodes = visibleNodes.value
-  const links = visibleLinks.value
-  if (nodes.length === 0) return
-
-  const width = svgSize.width || 800
-  const height = svgSize.height || 600
-  const oldPos = nodePositions.value
-
-  const simNodes: ForceNode[] = nodes.map(n => ({
-    id: n.id,
-    name: n.name,
-    group: n.group,
-    level: n.level,
-    description: n.description,
-    radius: getBaseRadius(n.group),
-    // 已有节点保留原坐标作为热启动；新节点在视口中心附近随机散布
-    x: oldPos[n.id] ? oldPos[n.id]!.x : width / 2 + (Math.random() - 0.5) * 80,
-    y: oldPos[n.id] ? oldPos[n.id]!.y : height / 2 + (Math.random() - 0.5) * 80,
-  }))
-
-  const simLinks: ForceLink[] = links.map(l => ({
-    source: l.source,
-    target: l.target,
-    type: l.type,
-  }))
-
-  const sim = forceSimulation<ForceNode, ForceLink>(simNodes)
-    .force(
-      'link',
-      forceLink<ForceNode, ForceLink>(simLinks)
-        .id(d => d.id)
-        .distance(linkDistance)
-        .strength(FORCE.linkStrength)
-    )
-    .force('charge', forceManyBody<ForceNode>().strength(FORCE.chargeStrength))
-    .force(
-      'collide',
-      forceCollide<ForceNode>().radius(d => d.radius + FORCE.collidePadding)
-    )
-    .force('center', forceCenter<ForceNode>(width / 2, height / 2))
-    .force('x', forceX<ForceNode>(width / 2).strength(FORCE.centerStrength))
-    .force('y', forceY<ForceNode>(height / 2).strength(FORCE.centerStrength))
-
-  simulation = sim
-
-  // 每帧 tick 同步坐标到响应式 nodePositions，驱动 SVG 渲染
-  sim.on('tick', () => {
-    const pos: Record<string, { x: number; y: number }> = {}
-    for (const node of simNodes) {
-      pos[node.id] = { x: node.x ?? 0, y: node.y ?? 0 }
-    }
-    nodePositions.value = pos
-  })
-
-  // 收敛后自动适配视口（fitToContent）
-  sim.on('end', () => {
-    fitToContent()
-  })
-
-  sim.alpha(0.5).restart()
-
-  // 兜底：即使 alpha 未完全收敛，也保证图稳定后 fit 一次
-  fitTimer = setTimeout(() => {
-    if (simulation === sim) fitToContent()
-  }, 2500)
-}
-
-// ── Expand / Collapse ──
+// ── 展开 / 收起 ──
 function toggleNode(nodeId: string) {
   const cm = childrenMap.value
   const children = cm.get(nodeId) || []
-
   if (children.length === 0) return
 
-  if (expandedNodes.value.has(nodeId)) {
-    // Collapse: remove node and all descendants
-    const descendants = new Set<string>()
+  const next = new Set(expandedNodes.value)
+
+  if (next.has(nodeId)) {
+    // 收起：同时移出全部后代
     const collect = (id: string) => {
-      const kids = cm.get(id) || []
-      for (const k of kids) {
-        descendants.add(k)
-        collect(k)
+      for (const child of cm.get(id) || []) {
+        next.delete(child)
+        collect(child)
       }
     }
+    next.delete(nodeId)
     collect(nodeId)
-
-    const newSet = new Set(expandedNodes.value)
-    newSet.delete(nodeId)
-    for (const d of descendants) newSet.delete(d)
-
-    // Also remove positions for collapsed nodes (optional, to recalculate on re-expand)
-    const newPositions = { ...nodePositions.value }
-    for (const d of descendants) delete newPositions[d]
-    nodePositions.value = newPositions
-
-    expandedNodes.value = newSet
   } else {
-    // Expand
-    expandedNodes.value = new Set([...expandedNodes.value, nodeId])
+    next.add(nodeId)
   }
 
-  // 可见集合变化由下方 watch([expandedNodes, visibleNodeIds]) 驱动重建力模拟
+  expandedNodes.value = next
 }
 
-// ── Event Handlers ──
-const handleNodeClick = (node: KnowledgeNode, event: MouseEvent) => {
-  event.stopPropagation()
+// ── ECharts 配置构建 ──
+function buildSeriesData() {
+  const nodes = visibleNodes.value
+  const links = visibleLinks.value
 
-  // 新交互：单击节点仅负责“展开下一级”。
-  // 有下一级（子级）且未展开 → 展开显示下一级；
-  // 已展开 → 保持展开，不再收拢、不再定位高亮；
-  // 没有下一级 → 不做任何动作，节点保持不变（进入课程交给双击）。
-  const hasChildren = (hasChildrenMap.value.get(node.id)?.length ?? 0) > 0
+  const nodeItems = nodes.map(n => {
+    const base = getColor(n.group)
+    const isRoot = n.group === 0
+    const path = isPathNode(n.id)
+    const dimmed = isDimmed(n.id)
+    const children = childrenMap.value.get(n.id) || []
+    const expandable = children.length > 0 && !expandedNodes.value.has(n.id)
+
+    return {
+      id: n.id,
+      kpId: n.id,
+      name: n.name,
+      desc: n.description ?? '',
+      group: n.group,
+      symbolSize: isRoot ? 54 : 38,
+      itemStyle: {
+        color: makeRadialColor(base, isRoot),
+        borderColor: path ? '#1677ff' : withAlpha(base, isRoot ? 0.95 : 0.85),
+        borderWidth: path ? 3 : isRoot ? 2 : 1.5,
+        opacity: dimmed ? 0.28 : 1,
+        shadowBlur: isRoot ? 22 : 12,
+        shadowColor: withAlpha(base, isRoot ? 0.45 : 0.28),
+        shadowOffsetY: 4,
+      },
+      label: {
+        formatter: expandable ? `${n.name}  +` : n.name,
+        color: dimmed ? '#b8c0cc' : '#1f2937',
+        opacity: dimmed ? 0.5 : 1,
+        fontSize: isRoot ? 13 : 12,
+        fontWeight: isRoot ? 600 : 500,
+        borderColor: path ? withAlpha('#1677ff', 0.5) : withAlpha(base, dimmed ? 0.12 : 0.3),
+      },
+    }
+  })
+
+  const linkItems = links.map(l => {
+    const meta = getLinkMeta(l.type)
+    const path = isPathEdge(l)
+    const dimmed =
+      isNonPathNode(l.source) ||
+      isNonPathNode(l.target) ||
+      isSearchDimNode(l.source) ||
+      isSearchDimNode(l.target)
+
+    const sourceName = nodeMap.value.get(l.source)?.name ?? l.source
+    const targetName = nodeMap.value.get(l.target)?.name ?? l.target
+
+    return {
+      source: l.source,
+      target: l.target,
+      relType: l.type,
+      sourceName,
+      targetName,
+      symbol: l.type === 'PARENT_KP' ? ['none', 'arrow'] : 'none',
+      symbolSize: 7,
+      lineStyle: {
+        color: path ? '#1677ff' : meta.color,
+        width: path ? 3 : l.type === 'PARENT_KP' ? 1.8 : 1.4,
+        opacity: path ? 0.9 : dimmed ? 0.1 : 0.55,
+        curveness: 0.16,
+        type: meta.dashed ? 'dashed' : 'solid',
+      },
+    }
+  })
+
+  return { nodeItems, linkItems }
+}
+
+function buildTooltipFormatter() {
+  return (params: TooltipParams): string => {
+    const data = params?.data ?? {}
+
+    if (params?.dataType === 'edge') {
+      const meta = getLinkMeta(data.relType ?? '')
+      return (
+        `<div style="max-width:260px">` +
+        `<div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#334155">` +
+        `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${meta.color}"></span>` +
+        `${escapeHtml(meta.label)}</div>` +
+        `<div style="margin-top:6px;font-size:12px;color:#64748b;line-height:1.6">` +
+        `${escapeHtml(data.sourceName ?? '')} → ${escapeHtml(data.targetName ?? '')}</div>` +
+        `</div>`
+      )
+    }
+
+    const color = getColor(Number(data.group ?? 0))
+    const desc = data.desc
+      ? `<div style="margin-top:6px;font-size:12px;color:#64748b;line-height:1.6">${escapeHtml(data.desc)}</div>`
+      : ''
+    return (
+      `<div style="max-width:260px">` +
+      `<div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:#0f172a">` +
+      `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${color}"></span>` +
+      `${escapeHtml(data.name ?? '')}</div>${desc}` +
+      `<div style="margin-top:8px;font-size:11px;color:#94a3b8">双击进入课程 · 单击展开下级</div>` +
+      `</div>`
+    )
+  }
+}
+
+function buildOption(): EChartsOption {
+  const { nodeItems, linkItems } = buildSeriesData()
+
+  const option = {
+    backgroundColor: 'transparent',
+    animation: true,
+    animationDuration: 600,
+    animationDurationUpdate: 520,
+    animationEasing: 'cubicOut',
+    animationEasingUpdate: 'cubicOut',
+    tooltip: {
+      trigger: 'item',
+      confine: true,
+      enterable: false,
+      backgroundColor: 'rgba(255,255,255,0.98)',
+      borderColor: 'rgba(148,163,184,0.35)',
+      borderWidth: 1,
+      padding: [10, 14],
+      textStyle: { color: '#1f2937', fontSize: 12 },
+      extraCssText: 'border-radius:10px;box-shadow:0 12px 32px rgba(15,23,42,0.14);',
+      formatter: buildTooltipFormatter(),
+    },
+    series: [
+      {
+        type: 'graph',
+        layout: 'force',
+        roam: true,
+        draggable: true,
+        cursor: 'pointer',
+        scaleLimit: { min: MIN_ZOOM, max: MAX_ZOOM },
+        force: {
+          repulsion: 420,
+          edgeLength: [95, 140],
+          gravity: 0.14,
+          friction: 0.6,
+          layoutAnimation: true,
+        },
+        label: {
+          show: true,
+          position: 'bottom',
+          distance: 8,
+          color: '#1f2937',
+          fontSize: 12,
+          fontWeight: 500,
+          width: 108,
+          overflow: 'truncate',
+          padding: [4, 8],
+          borderRadius: 6,
+          backgroundColor: 'rgba(255,255,255,0.92)',
+          borderColor: 'rgba(148,163,184,0.3)',
+          borderWidth: 1,
+          shadowBlur: 6,
+          shadowColor: 'rgba(15,23,42,0.08)',
+          shadowOffsetY: 2,
+        },
+        labelLayout: { hideOverlap: true },
+        lineStyle: {
+          color: DEFAULT_LINK_META.color,
+          width: 1.4,
+          opacity: 0.55,
+          curveness: 0.16,
+        },
+        emphasis: {
+          focus: 'adjacency',
+          scale: 1.15,
+          itemStyle: { borderWidth: 3, shadowBlur: 26 },
+          label: { fontWeight: 700, color: '#0f172a' },
+          lineStyle: { width: 3, opacity: 0.9 },
+        },
+        blur: {
+          itemStyle: { opacity: 0.2 },
+          label: { opacity: 0.2 },
+          lineStyle: { opacity: 0.08 },
+        },
+        data: nodeItems,
+        links: linkItems,
+      },
+    ],
+  }
+
+  return option as unknown as EChartsOption
+}
+
+// ── 渲染 ──
+function ensureChart(): echarts.ECharts | null {
+  if (chartInstance) return chartInstance
+  const el = chartRef.value
+  if (!el || el.clientWidth === 0 || el.clientHeight === 0) return null
+
+  chartInstance = echarts.init(el)
+  chartInstance.on('click', handleChartClick)
+  chartInstance.on('dblclick', handleChartDblClick)
+  chartInstance.on('contextmenu', handleChartContextMenu)
+  return chartInstance
+}
+
+function renderChart(notMerge = false) {
+  const chart = ensureChart()
+  if (!chart) return
+  if (props.data.nodes.length === 0) {
+    chart.clear()
+    return
+  }
+  chart.setOption(buildOption(), { notMerge })
+  scheduleFit()
+}
+
+// 力导向布局结束后，把整张图缩放到可视区域内，避免节点溢出画布
+function scheduleFit(delay = 1600) {
+  if (fitTimer) clearTimeout(fitTimer)
+  fitTimer = setTimeout(() => {
+    fitTimer = null
+    fitToContent()
+  }, delay)
+}
+
+function fitToContent() {
+  const chart = chartInstance
+  if (!chart) return
+
+  const model = (chart as unknown as ChartInternal).getModel?.()
+  const series = model?.getSeriesByIndex?.(0)
+  const preserved = series?.preservedPoints
+  if (!preserved) return
+
+  let minX = Infinity
+  let maxX = -Infinity
+  let minY = Infinity
+  let maxY = -Infinity
+  for (const id of visibleNodeIds.value) {
+    const [px, py] = preserved[id] ?? []
+    if (typeof px !== 'number' || typeof py !== 'number' || isNaN(px) || isNaN(py)) continue
+    if (px < minX) minX = px
+    if (px > maxX) maxX = px
+    if (py < minY) minY = py
+    if (py > maxY) maxY = py
+  }
+  if (!isFinite(minX) || !isFinite(minY)) return
+
+  const width = chart.getWidth()
+  const height = chart.getHeight()
+  if (width === 0 || height === 0) return
+
+  // 预留节点半径与下方标签的空间
+  const padX = 72
+  const padTop = 44
+  const padBottom = 78
+  const contentW = Math.max(maxX - minX, 1) + padX * 2
+  const contentH = Math.max(maxY - minY, 1) + padTop + padBottom
+  const zoom = Math.min(width / contentW, height / contentH, 1.15)
+  const safeZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom))
+
+  chart.setOption({
+    series: [
+      {
+        center: [(minX + maxX) / 2, (minY + maxY) / 2 - (padBottom - padTop) / 2],
+        zoom: safeZoom,
+      },
+    ],
+  } as EChartsOption)
+}
+
+let renderScheduled = false
+function scheduleRender(notMerge = false) {
+  if (renderScheduled) {
+    if (notMerge) pendingNotMerge = true
+    return
+  }
+  renderScheduled = true
+  nextTick(() => {
+    renderScheduled = false
+    const shouldNotMerge = pendingNotMerge
+    pendingNotMerge = false
+    renderChart(shouldNotMerge)
+  })
+}
+let pendingNotMerge = false
+
+// ── ECharts 交互 ──
+// 双击会先触发两次 click，故单击切换延时执行，双击命中时取消待执行的切换
+let clickTimer: ReturnType<typeof setTimeout> | null = null
+
+function handleChartClick(params: GraphEventParams) {
+  if (params?.dataType !== 'node') return
+  const nodeId = (params?.data as GraphNodeEventData | undefined)?.kpId
+  if (!nodeId) return
+
+  // 无下级节点：单击不做任何事
+  const hasChildren = (childrenMap.value.get(nodeId)?.length ?? 0) > 0
   if (!hasChildren) return
-  if (!expandedNodes.value.has(node.id)) {
-    toggleNode(node.id)
+
+  // 单击切换：已展开则收起（toggleNode 会连带移除全部后代），未展开则展开
+  if (clickTimer) clearTimeout(clickTimer)
+  clickTimer = setTimeout(() => {
+    clickTimer = null
+    toggleNode(nodeId)
+  }, 300)
+}
+
+function handleChartDblClick(params: GraphEventParams) {
+  // 双击命中：取消单击待执行的展开/收起，避免进课程前状态闪变
+  if (clickTimer) {
+    clearTimeout(clickTimer)
+    clickTimer = null
   }
-}
-
-const handleIndicatorClick = (nodeId: string) => {
-  toggleNode(nodeId)
-}
-
-const handleNodeDblClick = (nodeId: string, event: MouseEvent) => {
-  event.stopPropagation()
-  // 新交互：双击节点进入该节点对应的课程。
-  // 复用父组件 CourseDetail.vue 现有 @node-click="handleGraphNodeClick" → selectKpFromGraph
-  // 的“进入课程/展示该知识点资源”机制，不发明新路由。
-  // 保留 node-dblclick 发射以维持原有对外契约（父组件当前未绑定，无副作用）。
+  if (params?.dataType !== 'node') return
+  const nodeId = (params?.data as GraphNodeEventData | undefined)?.kpId
+  if (!nodeId) return
   emit('node-click', nodeId)
   emit('node-dblclick', nodeId)
 }
 
-const handleNodeMouseOver = (node: KnowledgeNode, event: MouseEvent) => {
-  hoverNodeId.value = node.id
-  const containerRect = containerRef.value?.getBoundingClientRect()
-  if (containerRect) {
-    tooltip.value = {
-      visible: true,
-      name: node.name,
-      desc: (node as any).description ?? '',
-      left: event.clientX - containerRect.left + 12,
-      top: event.clientY - containerRect.top - 12,
+// 右键收起：只对「已展开」的节点生效，收起时连同其全部后代一并移除（复用 toggleNode 的递归收起逻辑）
+function handleChartContextMenu(params: GraphEventParams) {
+  if (params?.dataType !== 'node') return
+  const nodeId = (params?.data as GraphNodeEventData | undefined)?.kpId
+  if (!nodeId) return
+  if (!expandedNodes.value.has(nodeId)) return
+  toggleNode(nodeId)
+}
+
+// ── 当前缩放（ECharts 会把 roam 结果同步回 series.zoom） ──
+function getCurrentZoom(): number {
+  if (!chartInstance) return 1
+  const option = chartInstance.getOption() as unknown as { series?: SeriesSnapshot[] }
+  const series = Array.isArray(option?.series) ? option.series[0] : null
+  return typeof series?.zoom === 'number' ? series.zoom : 1
+}
+
+function applyZoom(zoom: number, center?: number[] | string[]) {
+  if (!chartInstance) return
+  const payload: Record<string, unknown> = { zoom }
+  if (center) payload.center = center
+  chartInstance.setOption({ series: [payload] } as EChartsOption, { notMerge: false })
+}
+
+// ── 图谱节点坐标（force 布局会把坐标保存在 preservedPoints） ──
+function getNodePoint(nodeId: string): number[] | null {
+  if (!chartInstance) return null
+  const model = (chartInstance as unknown as ChartInternal).getModel?.()
+  const series = model?.getSeriesByIndex?.(0)
+
+  const [px, py] = series?.preservedPoints?.[nodeId] ?? []
+  if (typeof px === 'number' && typeof py === 'number' && !isNaN(px) && !isNaN(py)) {
+    return [px, py]
+  }
+
+  const idx = visibleNodes.value.findIndex(n => n.id === nodeId)
+  if (idx < 0) return null
+  const layout = series?.getData?.()?.getItemLayout?.(idx)
+  if (Array.isArray(layout) && typeof layout[0] === 'number' && typeof layout[1] === 'number') {
+    return layout as number[]
+  }
+  return null
+}
+
+// ── 对外方法（保持原有契约） ──
+function highlightNode(keyword: string) {
+  searchKeyword.value = keyword
+  scheduleRender()
+}
+
+function zoomIn() {
+  applyZoom(Math.min(MAX_ZOOM, getCurrentZoom() * 1.25))
+}
+
+function zoomOut() {
+  applyZoom(Math.max(MIN_ZOOM, getCurrentZoom() * 0.8))
+}
+
+function zoomReset() {
+  applyZoom(1, ['50%', '50%'])
+}
+
+function centerOnNodeById(nodeId: string) {
+  // 自动展开祖先链，保证目标节点可见
+  const ancestors: string[] = []
+  let cursor: string | undefined = nodeId
+  const pm = parentMap.value
+  while (cursor && pm.has(cursor) && ancestors.length < 40) {
+    cursor = pm.get(cursor)
+    if (cursor) ancestors.push(cursor)
+  }
+
+  let changed = false
+  const next = new Set(expandedNodes.value)
+  for (const id of ancestors) {
+    if (!next.has(id)) {
+      next.add(id)
+      changed = true
     }
   }
-}
+  if (changed) expandedNodes.value = next
 
-const handleNodeMouseOut = () => {
-  hoverNodeId.value = null
-  tooltip.value.visible = false
-}
-
-// ── Zoom: Wheel ──
-const handleWheel = (event: WheelEvent) => {
-  const containerRect = containerRef.value?.getBoundingClientRect()
-  if (!containerRect) return
-
-  const delta = event.deltaY > 0 ? 0.92 : 1.08
-  const newScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom.scale * delta))
-
-  // Zoom toward cursor position
-  const mouseX = event.clientX - containerRect.left
-  const mouseY = event.clientY - containerRect.top
-  const scaleChange = newScale / zoom.scale
-
-  zoom.x = mouseX - (mouseX - zoom.x) * scaleChange
-  zoom.y = mouseY - (mouseY - zoom.y) * scaleChange
-  zoom.scale = newScale
-}
-
-// ── Zoom: Pan (drag on SVG background) ──
-const handleSvgMouseDown = (event: MouseEvent) => {
-  // Only drag on background (SVG element itself, not on nodes)
-  if ((event.target as Element).closest('.node-group')) return
-
-  isDragging = true
-  dragStart = { x: event.clientX, y: event.clientY }
-  dragZoomStart = { x: zoom.x, y: zoom.y }
-
-  const onMouseMove = (e: MouseEvent) => {
-    if (!isDragging) return
-    zoom.x = dragZoomStart.x + (e.clientX - dragStart.x)
-    zoom.y = dragZoomStart.y + (e.clientY - dragStart.y)
+  if (centerTimer) clearTimeout(centerTimer)
+  if (fitTimer) {
+    clearTimeout(fitTimer)
+    fitTimer = null
   }
 
-  const onMouseUp = () => {
-    isDragging = false
-    window.removeEventListener('mousemove', onMouseMove)
-    window.removeEventListener('mouseup', onMouseUp)
+  // 新节点需要等待力布局算出坐标，这里做几次重试
+  const tryCenter = (attempt: number) => {
+    const point = getNodePoint(nodeId)
+    if (point) {
+      applyZoom(Math.max(getCurrentZoom(), 1), point)
+      return
+    }
+    if (attempt < 5) {
+      centerTimer = setTimeout(() => tryCenter(attempt + 1), 350)
+    }
   }
-
-  window.addEventListener('mousemove', onMouseMove)
-  window.addEventListener('mouseup', onMouseUp)
+  centerTimer = setTimeout(() => tryCenter(0), 350)
 }
 
-// ── Initial zoom fit ──
-function fitToContent() {
-  const rect = containerRef.value?.getBoundingClientRect()
-  if (!rect || rect.width === 0) return
-  const w = rect.width
-  const h = rect.height
+function flashNode(nodeId: string) {
+  if (!chartInstance) return
+  const dataIndex = visibleNodes.value.findIndex(n => n.id === nodeId)
+  if (dataIndex < 0) return
 
-  const positions = Object.values(nodePositions.value)
-  if (positions.length === 0) return
-
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
-  for (const p of positions) {
-    if (p.x < minX) minX = p.x
-    if (p.x > maxX) maxX = p.x
-    if (p.y < minY) minY = p.y
-    if (p.y > maxY) maxY = p.y
-  }
-
-  const contentW = maxX - minX + 200
-  const contentH = maxY - minY + 200
-  const scaleX = w / contentW
-  const scaleY = h / contentH
-  const fitScale = Math.min(scaleX, scaleY, 1.2)
-
-  zoom.x = w / 2 - ((minX + maxX) / 2) * fitScale
-  zoom.y = h / 2 - ((minY + maxY) / 2) * fitScale
-  zoom.scale = fitScale
-}
-
-// ── Public Methods ──
-
-const highlightNode = (keyword: string) => {
-  searchKeyword.value = keyword
-}
-
-const zoomIn = () => {
-  zoom.scale = Math.min(MAX_ZOOM, zoom.scale * 1.3)
-}
-
-const zoomOut = () => {
-  zoom.scale = Math.max(MIN_ZOOM, zoom.scale * 0.7)
-}
-
-const zoomReset = () => {
-  zoom.x = 0
-  zoom.y = 0
-  zoom.scale = 1
-}
-
-const centerOnNodeById = (nodeId: string) => {
-  const pos = nodePositions.value[nodeId]
-  if (!pos || !containerRef.value) return
-  const w = containerRef.value.clientWidth
-  const h = containerRef.value.clientHeight
-  zoom.x = w / 2 - pos.x * zoom.scale
-  zoom.y = h / 2 - pos.y * zoom.scale
-  fitToContent()
-}
-
-const flashNode = (nodeId: string) => {
-  flashingNodeIds.value = new Set([...flashingNodeIds.value, nodeId])
-  setTimeout(() => {
-    const next = new Set(flashingNodeIds.value)
-    next.delete(nodeId)
-    flashingNodeIds.value = next
-  }, 2000)
+  if (flashTimer) clearInterval(flashTimer)
+  let count = 0
+  flashTimer = setInterval(() => {
+    if (!chartInstance) return
+    chartInstance.dispatchAction({
+      type: count % 2 === 0 ? 'highlight' : 'downplay',
+      seriesIndex: 0,
+      dataIndex,
+    })
+    count += 1
+    if (count >= 6 && flashTimer) {
+      clearInterval(flashTimer)
+      flashTimer = null
+      chartInstance?.dispatchAction({ type: 'downplay', seriesIndex: 0, dataIndex })
+    }
+  }, 320)
 }
 
 const showLearningPath = (orderedIds: string[]) => {
@@ -722,11 +743,13 @@ const showLearningPath = (orderedIds: string[]) => {
   }
   learningPathNodeIds.value = nodeSet
   learningPathEdgeSet.value = edgeSet
+  scheduleRender()
 }
 
 const clearLearningPath = () => {
   learningPathNodeIds.value = new Set()
   learningPathEdgeSet.value = new Set()
+  scheduleRender()
 }
 
 defineExpose({
@@ -740,72 +763,55 @@ defineExpose({
   flashNode,
 })
 
-// ── Resize Observer ──
-let resizeObserver: ResizeObserver | null = null
-let resizeTimer: ReturnType<typeof setTimeout> | null = null
-
-function updateSvgSize() {
-  if (!containerRef.value) return
-  const w = containerRef.value.clientWidth
-  const h = containerRef.value.clientHeight
-  if (w > 0 && h > 0) {
-    svgSize.width = w
-    svgSize.height = h
-    return true
-  }
-  return false
-}
-
-// ── Watchers ──
+// ── 数据变化：重置展开状态并整体重建 ──
 function applyInitialExpand() {
   if (!props.autoExpandAll) return
+  const next = new Set(expandedNodes.value)
   for (const l of parsedLinks.value) {
-    if (isParentLink(l.type)) expandedNodes.value.add(l.source)
+    if (isParentLink(l.type)) next.add(l.source)
   }
+  expandedNodes.value = next
 }
 
 watch(
   () => props.data,
   () => {
     expandedNodes.value = new Set()
-    applyInitialExpand()
-    nodePositions.value = {}
+    searchKeyword.value = ''
     learningPathNodeIds.value = new Set()
     learningPathEdgeSet.value = new Set()
-    searchKeyword.value = ''
-    nextTick(() => buildSimulation())
+    applyInitialExpand()
+    scheduleRender(true)
   },
   { deep: true }
 )
 
-// 仅当可见集合（展开/收起）变化时重建模拟，坐标变化由 simulation tick 驱动
+// 可见集合或高亮状态变化 → 增量更新（保留缩放/位置）
 watch(
-  [expandedNodes, visibleNodeIds],
-  () => {
-    nextTick(() => buildSimulation())
-  },
+  [visibleNodeIds, searchKeyword, learningPathNodeIds, learningPathEdgeSet],
+  () => scheduleRender(),
   { deep: true }
 )
 
-// ── Lifecycle ──
+// ── 生命周期 ──
 onMounted(() => {
   nextTick(() => {
-    // 首次挂载也应用初始展开（autoExpandAll），否则初始只显示根节点
-    expandedNodes.value = new Set()
     applyInitialExpand()
-    if (updateSvgSize()) {
-      buildSimulation()
-    }
+    renderChart(true)
 
     if (containerRef.value) {
       resizeObserver = new ResizeObserver(() => {
+        const container = containerRef.value
+        // 标签页隐藏时尺寸为 0，跳过以免 ECharts 报警告
+        if (!container || container.clientWidth === 0 || container.clientHeight === 0) return
         if (resizeTimer) clearTimeout(resizeTimer)
         resizeTimer = setTimeout(() => {
-          if (updateSvgSize()) {
-            // Re-run force simulation on resize（保留当前展开状态，热启动）
-            nodePositions.value = {}
-            buildSimulation()
+          if (!chartInstance) {
+            renderChart(true)
+            return
           }
+          chartInstance.resize()
+          scheduleFit(400)
         }, 100)
       })
       resizeObserver.observe(containerRef.value)
@@ -814,8 +820,6 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  nodePositions.value = {}
-  stopSimulation()
   if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null
@@ -824,116 +828,110 @@ onBeforeUnmount(() => {
     clearTimeout(resizeTimer)
     resizeTimer = null
   }
-  if (activeTimeout) {
-    clearTimeout(activeTimeout)
-    activeTimeout = null
+  if (flashTimer) {
+    clearInterval(flashTimer)
+    flashTimer = null
+  }
+  if (centerTimer) {
+    clearTimeout(centerTimer)
+    centerTimer = null
+  }
+  if (fitTimer) {
+    clearTimeout(fitTimer)
+    fitTimer = null
+  }
+  if (clickTimer) {
+    clearTimeout(clickTimer)
+    clickTimer = null
+  }
+  if (chartInstance) {
+    chartInstance.dispose()
+    chartInstance = null
   }
 })
 </script>
 
 <style scoped>
 .kg-chart {
+  position: relative;
   width: 100%;
   height: 100%;
-  background: #f5f5f5;
-  position: relative;
+  min-height: 360px;
+  border-radius: 10px;
+  background-color: #f8fafc;
+  background-image:
+    radial-gradient(circle at 50% 45%, rgba(59, 130, 246, 0.1), rgba(59, 130, 246, 0) 62%),
+    radial-gradient(rgba(148, 163, 184, 0.22) 1px, transparent 1px);
+  background-size: 100% 100%, 18px 18px;
   overflow: hidden;
 }
 
-.kg-svg {
-  display: block;
+/* 绝对定位填满容器：父级只有 min-height、没有显式 height 时，height:100% 会解析为 0，
+   导致 ECharts 初始化失败（画布空白），用 inset:0 直接相对 .kg-chart 的实际渲染盒定位 */
+.kg-canvas {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
 }
 
-.node-tooltip {
+.kg-legend {
   position: absolute;
-  z-index: 100;
-  background: rgba(0, 0, 0, 0.8);
-  color: #fff;
-  padding: 6px 10px;
-  border-radius: 4px;
+  top: 14px;
+  left: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  backdrop-filter: blur(6px);
   font-size: 12px;
+  color: #475569;
   pointer-events: none;
-  white-space: nowrap;
 }
 
-.tooltip-name {
-  font-weight: 600;
+.kg-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1;
 }
 
-.tooltip-desc {
-  margin-top: 2px;
-  opacity: 0.8;
+.kg-legend-line {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  border-top-width: 2px;
+}
+
+.line-solid {
+  border-top-style: solid;
+  border-top-color: #4dabf7;
+}
+
+.line-dashed {
+  border-top-style: dashed;
+  border-top-color: #94a3b8;
+}
+
+.line-dotted {
+  border-top-style: dotted;
+  border-top-color: #a78bfa;
+}
+
+.kg-hint {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.2);
   font-size: 11px;
-}
-
-/* ── Node animations ── */
-.node-group {
-  animation: node-enter 0.35s ease-out;
-  transition: transform 0.4s ease;
-}
-
-@keyframes node-enter {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.node-circle {
-  transition: r 0.2s ease, fill 0.2s ease, stroke 0.2s ease, stroke-width 0.3s ease, stroke-opacity 0.3s ease;
-}
-
-.node-label {
-  transition: fill 0.3s ease, font-weight 0.3s ease;
+  color: #94a3b8;
+  pointer-events: none;
   user-select: none;
-  pointer-events: none;
-}
-
-/* ── Flash animation ── */
-.node-flash .node-circle {
-  animation: flash-pulse 0.7s ease-in-out 3;
-}
-
-@keyframes flash-pulse {
-  0%,
-  100% {
-    fill-opacity: 0.25;
-    stroke-width: 2;
-    stroke: inherit;
-  }
-  50% {
-    fill-opacity: 0.5;
-    stroke-width: 4;
-    stroke: #ff4d4f;
-  }
-}
-
-.node-flash .node-label {
-  animation: flash-label 0.7s ease-in-out 3;
-}
-
-@keyframes flash-label {
-  0%,
-  100% {
-    fill: #262626;
-  }
-  50% {
-    fill: #ff4d4f;
-  }
-}
-
-/* ── Links transition ── */
-.links line {
-  transition: stroke 0.4s ease, stroke-width 0.4s ease, stroke-opacity 0.4s ease;
-}
-
-/* ── Expand indicator ── */
-.expand-indicator {
-  pointer-events: none;
 }
 </style>
-（内容由AI生成，仅供参考）

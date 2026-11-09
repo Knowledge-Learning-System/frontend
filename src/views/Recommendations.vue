@@ -7,34 +7,13 @@
           <el-icon><ArrowLeft /></el-icon>
           返回
         </el-button>
-        <h1 class="page-title">智能推荐</h1>
+        <h1 class="page-title">{{ activeKpId ? '知识点前置推荐' : '智能推荐' }}</h1>
+        <p v-if="activeKpId" class="page-subtitle">当前知识点：{{ activeKpName || activeKpId }}</p>
       </div>
       <el-button type="primary" @click="handleRefresh" :loading="loading">
         <el-icon><Refresh /></el-icon>
         刷新推荐
       </el-button>
-    </div>
-
-    <!-- 推荐说明 -->
-    <div class="rec-intro">
-      <el-alert
-        title="基于你的学习进度和知识图谱，系统为你推荐以下学习节点"
-        type="info"
-        :closable="false"
-        show-icon
-      >
-        <template #default>
-          <div class="intro-content">
-            <p>推荐算法考虑了以下因素：</p>
-            <ul>
-              <li>前置知识点的掌握情况</li>
-              <li>知识点的重要性和难度</li>
-              <li>你的学习历史和偏好</li>
-              <li>知识点的先修依赖关系</li>
-            </ul>
-          </div>
-        </template>
-      </el-alert>
     </div>
 
     <!-- 推荐列表 -->
@@ -46,9 +25,7 @@
           </el-empty>
         </div>
         <div v-else-if="recommendations.length === 0 && !loading" class="empty-state">
-          <el-empty description="暂无推荐数据，请先完成答题以生成学习分析">
-            <el-button type="primary" @click="handleBack">返回学习</el-button>
-          </el-empty>
+          <el-empty :description="emptyText" />
         </div>
 
         <div
@@ -174,10 +151,11 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{ embedded?: boolean }>()
+const props = defineProps<{ embedded?: boolean; kpId?: string; kpName?: string; courseId?: number }>()
+const emit = defineEmits<{ (e: 'locate', payload: { id: string; name: string }): void }>()
 
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   Aim, ArrowLeft, Document, Folder, Sunny, Promotion,
   Refresh, RefreshRight, StarFilled, TrendCharts, VideoPlay,
@@ -197,6 +175,7 @@ interface RecommendationItem {
 }
 
 const router = useRouter()
+const route = useRoute()
 const courseStore = useCourseStore()
 const userStore = useUserStore()
 
@@ -205,18 +184,35 @@ const error = ref('')
 
 const recommendations = ref<RecommendationItem[]>([])
 
+/** 当前推荐上下文的知识点：优先取父组件传入，独立页回退到路由参数 */
+const activeKpId = computed(() => {
+  if (props.kpId) return props.kpId
+  const q = route.query.kpId
+  return typeof q === 'string' ? q : ''
+})
+const activeKpName = computed(() => {
+  if (props.kpName) return props.kpName
+  const q = route.query.kpName
+  return typeof q === 'string' ? q : ''
+})
+
+const emptyText = computed(() => {
+  if (!activeKpId.value) return '当前课程暂无可推荐的学习节点，请先完成部分学习或检查知识图谱数据'
+  return `「${activeKpName.value || activeKpId.value}」在知识图谱先修链中没有前置知识点`
+})
+
 const loadData = async () => {
-  const course = courseStore.getCurrentCourse()
+  const courseId = props.courseId ?? courseStore.getCurrentCourse()?.id
   const userId = userStore.userInfo?.id
-  if (!userId || !course) {
+  if (!userId || !courseId) {
     error.value = '无法获取用户或课程信息，请确认已登录并选择了课程'
     return
   }
-
+  // 未指定知识点时走整课推荐（课程级候选域），指定时走该知识点的前置推荐
   loading.value = true
   error.value = ''
   try {
-    const data = await getRecommendations(userId, course.id)
+    const data = await getRecommendations(userId, courseId, activeKpId.value || undefined)
     recommendations.value = data
   } catch (e: any) {
     error.value = e?.message || '加载推荐失败，请确认后端服务是否正常运行'
@@ -227,6 +223,11 @@ const loadData = async () => {
 }
 
 onMounted(() => {
+  loadData()
+})
+
+// 知识点变化后自动刷新：指定知识点看该点的前置推荐，未指定则看整课推荐
+watch(activeKpId, () => {
   loadData()
 })
 
@@ -257,10 +258,19 @@ const handleStartLearning = (item: RecommendationItem) => {
 
 const handleLocateInGraph = (item: RecommendationItem) => {
   const course = courseStore.getCurrentCourse()
+  const courseId = props.courseId ?? course?.id ?? 1
+
+  // 内嵌在课程详情页「推荐」tab 时，页面已挂载，push 同一路由仅变 query 不会重跑目标页 onMounted，
+  // 必须通过事件让父组件直接完成定位
+  if (props.embedded) {
+    emit('locate', { id: item.id, name: item.name })
+    return
+  }
+
   router.push({
-    path: `/course/${course?.id || 1}`,
-    query: { tab: 'graph', highlight: item.id, nodeName: item.name }
-  })
+    path: `/course/${courseId}`,
+    query: { tab: 'graph', knowledgePointId: item.id, highlight: item.id, nodeName: item.name }
+  }).catch(() => {})
 }
 </script>
 
@@ -289,6 +299,12 @@ const handleLocateInGraph = (item: RecommendationItem) => {
   font-weight: 600;
   color: #303133;
   margin: 0;
+}
+
+.page-subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #909399;
 }
 
 .rec-intro {

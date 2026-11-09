@@ -1342,6 +1342,10 @@ export interface GraphImportResult {
   writtenRelations: number
   deletedRelations: number
   autoRelations: number
+  /** 导入后依据图谱内容自动生成的章节数 */
+  chaptersGenerated?: number
+  /** 导入后自动归属到章节的知识点数 */
+  knowledgePointsAttached?: number
   failCount: number
   failDetails: string[]
 }

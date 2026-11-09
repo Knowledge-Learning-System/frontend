@@ -60,7 +60,8 @@
               v-for="src in msg.sources"
               :key="src.id"
               class="qa-source-tag"
-              :title="'点击查看 ' + src.name + ' 章节'"
+              :title="'点击跳转至知识章节：' + src.name"
+              @click="goToSource(src)"
             >
               {{ src.name }}<em> · {{ src.chapter }}</em>
             </span>
@@ -132,13 +133,28 @@
 
 <script setup lang="ts">
 import { ref, nextTick, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { UserFilled, ArrowDown, Delete } from '@element-plus/icons-vue'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { askQuestion, type QASource, type ChatMessage as ApiChatMessage } from '@/api/qa'
 
 const props = defineProps<{
   courseId?: number
 }>()
+
+const router = useRouter()
+
+/** 溯源跳转：进入对应课程详情页并定位到该知识点章节 */
+function goToSource(src: QASource) {
+  if (!src.courseId || !src.id) {
+    ElMessage.warning('该来源暂无可跳转的知识章节')
+    return
+  }
+  router.push({
+    path: `/course/${src.courseId}`,
+    query: { knowledgePointId: src.id },
+  })
+}
 
 const STORAGE_KEY = props.courseId ? `qa_history_${props.courseId}` : 'qa_history'
 
@@ -254,12 +270,12 @@ async function handleSend() {
   await nextTick()
   scrollToBottom()
 
-  try {
-    // 检索/生成分步反馈：约 1.2s 后认为检索阶段结束进入生成阶段
-    const stepTimer = setTimeout(() => {
-      loadingStep.value = 'generating'
-    }, 1200)
+  // 检索/生成分步反馈：约 1.2s 后认为检索阶段结束进入生成阶段
+  const stepTimer = setTimeout(() => {
+    loadingStep.value = 'generating'
+  }, 1200)
 
+  try {
     // 构建对话历史（最近 10 条，不含当前正在等待回答的用户消息）
     const history: ApiChatMessage[] = messages.value
       .filter((m) => m.role === 'user' || m.role === 'assistant')
@@ -536,7 +552,7 @@ function escapeHtml(text: string): string {
   color: #409eff;
   border-radius: 12px;
   font-size: 12px;
-  cursor: default;
+  cursor: pointer;
   border: 1px solid #d9ecff;
   transition: background 0.2s;
 }

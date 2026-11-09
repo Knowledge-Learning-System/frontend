@@ -6,13 +6,22 @@
     </div>
 
     <el-alert
-      v-if="isDemo"
-      title="暂无答题记录，当前展示为示例数据"
+      v-if="isEmpty"
+      title="暂无学习数据，完成答题后展示真实统计"
       type="info"
       :closable="false"
       show-icon
       style="margin-bottom: 16px"
     />
+
+    <!-- 课程学习进度 -->
+    <div class="progress-card">
+      <div class="progress-info">
+        <span class="progress-label">课程学习进度</span>
+        <span class="progress-value">{{ overview.courseProgress }}%</span>
+      </div>
+      <el-progress :percentage="overview.courseProgress" :stroke-width="10" />
+    </div>
 
     <!-- 概览卡片 -->
     <div class="stat-cards">
@@ -29,8 +38,8 @@
         <div class="stat-label">覆盖知识点</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value">{{ overview.attempts }}</div>
-        <div class="stat-label">答题次数</div>
+        <div class="stat-value">{{ formatDuration(overview.totalStudySeconds) }}</div>
+        <div class="stat-label">学习时长</div>
       </div>
     </div>
 
@@ -61,23 +70,43 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import * as echarts from 'echarts'
 import type { EChartsOption } from 'echarts'
+import { ElMessage } from 'element-plus'
+import { getStudentOverview } from '@/api/study'
+import { useCourseStore } from '@/stores/course'
+import { useUserStore } from '@/stores/user'
 
-// ---- 数据结构 ----
-interface AssessmentRecord {
-  id: string
-  title: string
-  date: string
-  totalQuestions: number
-  correctCount: number
-  score: number
-  totalScore: number
-  accuracyRate: number
-  timeSpent: string
+const courseStore = useCourseStore()
+const userStore = useUserStore()
+
+// ---- 数据结构（与后端 StudentOverviewVO 对齐） ----
+interface MasteryDistributionItem {
+  name: string
+  value: number
 }
 
-interface KpAgg {
+interface DailyTrendItem {
+  label: string
   total: number
   correct: number
+}
+
+interface KpStatItem {
+  kpId: string
+  kpName: string
+  total: number
+  correct: number
+  rate: number
+}
+
+interface OverviewData {
+  totalQuestions: number
+  accuracy: number
+  kpCount: number
+  totalStudySeconds: number
+  courseProgress: number
+  masteryDistribution: MasteryDistributionItem[]
+  dailyTrend: DailyTrendItem[]
+  kpStats: KpStatItem[]
 }
 
 const ringRef = ref<HTMLElement>()
@@ -88,143 +117,61 @@ let ringChart: echarts.ECharts | null = null
 let lineChart: echarts.ECharts | null = null
 let barChart: echarts.ECharts | null = null
 
-const isDemo = ref(false)
+const isEmpty = ref(false)
 
-// ---- 从 localStorage 聚合测评历史（assessment_history_*） ----
-function loadAllRecords(): AssessmentRecord[] {
-  const records: AssessmentRecord[] = []
+const overview = ref<OverviewData>({
+  totalQuestions: 0,
+  accuracy: 0,
+  kpCount: 0,
+  totalStudySeconds: 0,
+  courseProgress: 0,
+  masteryDistribution: [],
+  dailyTrend: [],
+  kpStats: [],
+})
+
+/** 秒数 → 人类可读时长 */
+function formatDuration(totalSeconds: number): string {
+  const sec = Math.max(0, Math.floor(totalSeconds || 0))
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  const s = sec % 60
+  if (h > 0) return `${h}小时${m}分`
+  if (m > 0) return `${m}分${s}秒`
+  return `${s}秒`
+}
+
+/** 从后端统计接口加载真实学习数据（功能3：去除 localStorage 聚合与 Mock 兜底） */
+const loadOverview = async () => {
+  const course = courseStore.getCurrentCourse()
+  const userId = userStore.userInfo?.id
+  if (!userId || !course) {
+    isEmpty.value = true
+    return
+  }
   try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (!key?.startsWith('assessment_history_')) continue
-      const raw = localStorage.getItem(key)
-      if (!raw) continue
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) {
-        parsed.forEach((r) => {
-          if (r && typeof r.date === 'string') records.push(r as AssessmentRecord)
-        })
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return records
-}
-
-function parseDate(dateStr: string): Date {
-  // date 形如 "2026/9/1 12:03:45"（toLocaleString('zh-CN')）
-  const d = new Date(dateStr)
-  return isNaN(d.getTime()) ? new Date() : d
-}
-
-function dayKey(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
-// ---- Mock 兜底数据（无答题记录时演示用） ----
-function buildDemoData() {
-  isDemo.value = true
-  const kps = ['数据库基础', 'SQL 查询', '事务与并发', '索引优化', '关系模型']
-  const records: AssessmentRecord[] = []
-  for (let d = 13; d >= 0; d--) {
-    const date = new Date()
-    date.setDate(date.getDate() - d)
-    if (d % 3 === 1) continue // 隔几天一次，模拟真实节奏
-    const total = 5 + Math.floor(Math.random() * 6)
-    const correct = Math.max(1, Math.round(total * (0.55 + Math.random() * 0.4)))
-    records.push({
-      id: `demo-${d}`,
-      title: kps[Math.floor(Math.random() * kps.length)] ?? '综合测评',
-      date: date.toLocaleString('zh-CN'),
-      totalQuestions: total,
-      correctCount: correct,
-      score: correct * 3,
-      totalScore: total * 3,
-      accuracyRate: Math.round((correct / total) * 100),
-      timeSpent: '3分20秒',
+    const data = await getStudentOverview(userId, course.id)
+    overview.value = data || overview.value
+    isEmpty.value = !(data && (data.totalQuestions > 0 || data.totalStudySeconds > 0))
+    requestAnimationFrame(() => {
+      renderRing()
+      renderLine()
+      renderBar()
     })
+  } catch (e: any) {
+    ElMessage.error(e?.message || '加载学习统计失败')
+    isEmpty.value = true
   }
-  return records
 }
 
-const records = ref<AssessmentRecord[]>([])
-
-// ---- 聚合统计 ----
-const overview = computed(() => {
-  const total = records.value.reduce((s, r) => s + (r.totalQuestions || 0), 0)
-  const correct = records.value.reduce((s, r) => s + (r.correctCount || 0), 0)
-  return {
-    totalQuestions: total,
-    accuracy: total ? Math.round((correct / total) * 100) : 0,
-    kpCount: new Set(records.value.map((r) => r.title)).size,
-    attempts: records.value.length,
-  }
-})
-
-const kpAgg = computed(() => {
-  const map = new Map<string, KpAgg>()
-  records.value.forEach((r) => {
-    const key = r.title || '未知知识点'
-    const agg = map.get(key) ?? { total: 0, correct: 0 }
-    agg.total += r.totalQuestions || 0
-    agg.correct += r.correctCount || 0
-    map.set(key, agg)
-  })
-  return [...map.entries()].map(([name, agg]) => ({
-    name,
-    total: agg.total,
-    correct: agg.correct,
-    rate: agg.total ? Math.round((agg.correct / agg.total) * 100) : 0,
-  }))
-})
-
-/** 近 14 天（含今日）每日汇总 */
-const dailyStats = computed(() => {
-  const days: { key: string; label: string; total: number; correct: number }[] = []
-  const map = new Map<string, { total: number; correct: number }>()
-  for (let d = 13; d >= 0; d--) {
-    const date = new Date()
-    date.setDate(date.getDate() - d)
-    const key = dayKey(date)
-    map.set(key, { total: 0, correct: 0 })
-    days.push({ key, label: `${date.getMonth() + 1}/${date.getDate()}`, total: 0, correct: 0 })
-  }
-  records.value.forEach((r) => {
-    const key = dayKey(parseDate(r.date))
-    const bucket = map.get(key)
-    if (bucket) {
-      bucket.total += r.totalQuestions || 0
-      bucket.correct += r.correctCount || 0
-    }
-  })
-  days.forEach((d) => {
-    const bucket = map.get(d.key)
-    if (bucket) {
-      d.total = bucket.total
-      d.correct = bucket.correct
-    }
-  })
-  return days
-})
 
 // ---- 图表渲染 ----
 function renderRing() {
   if (!ringRef.value) return
   ringChart = echarts.init(ringRef.value)
 
-  // 掌握度分布：正确率 >=80 已掌握，60-79 良好，<60 待加强
-  let mastered = 0
-  let good = 0
-  let weak = 0
-  kpAgg.value.forEach((kp) => {
-    if (kp.rate >= 80) mastered++
-    else if (kp.rate >= 60) good++
-    else weak++
-  })
+  // 掌握度分布：后端按已掌握/良好/待加强三档返回
+  const distribution = overview.value.masteryDistribution || []
 
   const option: EChartsOption = {
     tooltip: { trigger: 'item', formatter: '{b}: {c} 个知识点（{d}%）' },
@@ -244,11 +191,13 @@ function renderRing() {
             b: { fontSize: 12, color: '#909399', padding: [6, 0, 0, 0] },
           },
         },
-        data: [
-          { value: mastered, name: '已掌握（≥80%）', itemStyle: { color: '#67c23a' } },
-          { value: good, name: '良好（60%-79%）', itemStyle: { color: '#e6a23c' } },
-          { value: weak, name: '待加强（<60%）', itemStyle: { color: '#f56c6c' } },
-        ],
+        data: distribution.map((d) => ({
+          value: d.value,
+          name: d.name,
+          itemStyle: {
+            color: d.name.includes('已掌握') ? '#67c23a' : d.name.includes('良好') ? '#e6a23c' : '#f56c6c',
+          },
+        })),
       },
     ],
   }
@@ -259,7 +208,7 @@ function renderLine() {
   if (!lineRef.value) return
   lineChart = echarts.init(lineRef.value)
 
-  const days = dailyStats.value
+  const days = overview.value.dailyTrend || []
   const option: EChartsOption = {
     tooltip: { trigger: 'axis' },
     legend: { data: ['正确率', '答题数'], bottom: 0 },
@@ -302,7 +251,10 @@ function renderBar() {
   if (!barRef.value) return
   barChart = echarts.init(barRef.value)
 
-  const kps = [...kpAgg.value].sort((a, b) => b.total - a.total).slice(0, 8)
+  const kps = [...(overview.value.kpStats || [])]
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 8)
+    .map((k) => ({ name: k.kpName, total: k.total, correct: k.correct }))
   const option: EChartsOption = {
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
     legend: { data: ['答题数', '正确数'], bottom: 0 },
@@ -340,17 +292,14 @@ const handleResize = () => {
 }
 
 onMounted(() => {
-  const loaded = loadAllRecords()
-  records.value = loaded.length ? loaded : buildDemoData()
-  requestAnimationFrame(() => {
-    renderRing()
-    renderLine()
-    renderBar()
-  })
+  loadOverview()
+  // 功能1：答题提交后自动刷新统计
+  window.addEventListener('mastery-refresh', loadOverview)
   window.addEventListener('resize', handleResize)
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('mastery-refresh', loadOverview)
   window.removeEventListener('resize', handleResize)
   ringChart?.dispose()
   lineChart?.dispose()
@@ -378,6 +327,32 @@ onBeforeUnmount(() => {
   margin: 6px 0 0;
   font-size: 13px;
   color: #909399;
+}
+
+.progress-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.progress-label {
+  font-size: 13px;
+  color: #606266;
+}
+
+.progress-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #409eff;
 }
 
 .stat-cards {

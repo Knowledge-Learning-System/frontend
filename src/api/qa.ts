@@ -24,6 +24,8 @@ export interface QASource {
   id: string
   name: string
   chapter: string
+  /** 所属课程 ID（溯源跳转课程章节用） */
+  courseId?: number
   /** 该知识点在回答中的角色（命中知识点/前置知识等） */
   relation?: string
   /** 匹配分数 0~100 */

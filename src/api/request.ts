@@ -4,9 +4,6 @@ import type { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'a
 const request: AxiosInstance = axios.create({
   baseURL: '/api',
   timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 })
 
 request.interceptors.request.use(
