@@ -209,7 +209,7 @@
                       </div>
                       <div class="batch-status-row">
                         <template v-if="latestBatchScore(idx)">
-                          <span class="batch-status done">第{{ quizBatchScores[idx].length }}次</span>
+                          <span class="batch-status done">第{{ quizBatchScores[idx]?.length ?? 0 }}次</span>
                           <span class="batch-score">{{ latestBatchScore(idx)!.correctCount }}/{{ latestBatchScore(idx)!.totalQuestions }} · {{ Math.round((latestBatchScore(idx)!.correctCount / latestBatchScore(idx)!.totalQuestions) * 100) }}%</span>
                         </template>
                         <span v-else class="batch-status pending">未完成</span>
@@ -217,7 +217,7 @@
                     </div>
                     <div class="batch-actions">
                       <el-button
-                        v-if="quizBatchScores[idx].length > 0"
+                        v-if="(quizBatchScores[idx]?.length ?? 0) > 0"
                         size="small"
                         @click="showBatchHistory(idx)"
                       >查看历史</el-button>
@@ -420,18 +420,18 @@
                 <template v-if="historyDialogBatchIdx !== null">
                   <h4 class="history-title">测试{{ batchNumberText(historyDialogBatchIdx + 1) }}</h4>
                   <div
-                    v-for="(record, ri) in [...quizBatchScores[historyDialogBatchIdx]].reverse()"
+                    v-for="(record, ri) in [...(quizBatchScores[historyDialogBatchIdx] ?? [])].reverse()"
                     :key="ri"
                     class="history-item history-item-clickable"
                     @click="openHistoryDetail(record)"
                   >
-                    <span class="history-index">第{{ quizBatchScores[historyDialogBatchIdx].length - ri }}次</span>
+                    <span class="history-index">第{{ (quizBatchScores[historyDialogBatchIdx]?.length ?? 0) - ri }}次</span>
                     <span class="history-score">{{ record.correctCount }}/{{ record.totalQuestions }} 正确</span>
                     <span class="history-pct">{{ Math.round((record.correctCount / record.totalQuestions) * 100) }}%</span>
                     <span class="history-score-val">{{ record.correctCount * 3 }} 分</span>
                     <el-icon class="history-chevron"><ArrowRight /></el-icon>
                   </div>
-                  <el-empty v-if="quizBatchScores[historyDialogBatchIdx].length === 0" description="暂无记录" :image-size="40" />
+                  <el-empty v-if="(quizBatchScores[historyDialogBatchIdx]?.length ?? 0) === 0" description="暂无记录" :image-size="40" />
                 </template>
               </el-dialog>
 
@@ -761,7 +761,7 @@ const historyDetailItems = computed(() => {
       content: item.content || q?.content || `题目 ${item.questionId}`,
       options: item.options || q?.options || '',
       type: item.type || q?.type || 'single',
-      analysis: item.analysis || q?.analysis || '',
+      analysis: item.analysis || (q as any)?.analysis || '',
     }
   })
 })
@@ -795,13 +795,13 @@ function loadKpQuizScores(): (SubmitAnswerResult[])[] {
 
 function batchNumberText(n: number): string {
   const digits = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
-  if (n <= 10) return digits[n]
+  if (n <= 10) return digits[n] ?? String(n)
   return String(n)
 }
 
 function latestBatchScore(batchIdx: number): SubmitAnswerResult | null {
   const arr = quizBatchScores.value[batchIdx]
-  return arr && arr.length > 0 ? arr[arr.length - 1] : null
+  return arr && arr.length > 0 ? arr[arr.length - 1] ?? null : null
 }
 
 function showBatchHistory(batchIdx: number) {
@@ -979,7 +979,7 @@ const quizReviewItems = computed(() => {
       options: q?.options || '',
       userAnswer: userAnswers.value[item.questionId] || '',
       type: q?.type || 'single',
-      analysis: item.analysis || q?.analysis || '',
+      analysis: item.analysis || (q as any)?.analysis || '',
     }
   })
 })
@@ -1178,7 +1178,7 @@ function collectChapterQuestions(st: SubTopicVO): AssessmentQuestion[] {
   const shuffled = [...allRaw]
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
-    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    ;[shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!]
   }
 
   const MAX_QUESTIONS = 30
@@ -1542,7 +1542,7 @@ function splitQuizIntoBatches(all: QuestionItem[], batchSize = 30): QuestionItem
   const shuffled = [...all]
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
-    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    ;[shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!]
   }
   const batches: QuestionItem[][] = []
   for (let i = 0; i < shuffled.length; i += batchSize) {
@@ -1554,7 +1554,7 @@ function splitQuizIntoBatches(all: QuestionItem[], batchSize = 30): QuestionItem
 /** 从批次列表进入指定批次 */
 function startQuizBatch(idx: number) {
   currentQuizBatch.value = idx
-  questions.value = quizBatches.value[idx]
+  questions.value = quizBatches.value[idx] ?? []
   showQuizList.value = false
   quizSubmitted.value = false
   quizScore.value = null
@@ -1626,7 +1626,7 @@ async function submitQuiz() {
     const sec = Math.floor(elapsed / 1000)
     quizTimeSpent.value = sec >= 60 ? `${Math.floor(sec / 60)}分${sec % 60}秒` : `${sec}秒`
     ElMessage.success(`提交成功！${correctCount}/${questions.value.length} 题正确`)
-    quizBatchScores.value[currentQuizBatch.value].push(quizScore.value!)
+    quizBatchScores.value[currentQuizBatch.value]!.push(quizScore.value!)
     saveKpQuizScores()
     submitLoading.value = false
     return
@@ -1677,7 +1677,7 @@ async function submitQuiz() {
     quizTimeSpent.value = sec >= 60 ? `${Math.floor(sec / 60)}分${sec % 60}秒` : `${sec}秒`
     await nextTick()
     ElMessage.success(`提交成功！${result.correctCount}/${result.totalQuestions} 题正确`)
-    quizBatchScores.value[currentQuizBatch.value].push(result)
+    quizBatchScores.value[currentQuizBatch.value]!.push(result)
     saveKpQuizScores()
   } catch (err: any) {
     console.error('[submitQuiz] 异常:', err)
@@ -1699,7 +1699,7 @@ function restartQuiz() {
   textAnswer.value = ''
   showQuizAnalysis.value = false
   if (quizBatches.value[currentQuizBatch.value]) {
-    questions.value = quizBatches.value[currentQuizBatch.value]
+    questions.value = quizBatches.value[currentQuizBatch.value]!
   } else {
     fetchQuestionsForKp()
   }
@@ -1738,7 +1738,7 @@ async function saveKpNote() {
   try {
     await updateNote({ id: noteEditId.value, content: noteEditContent.value })
     const idx = kpNotes.value.findIndex(n => n.id === noteEditId.value)
-    if (idx !== -1) kpNotes.value[idx].content = noteEditContent.value
+    if (idx !== -1) kpNotes.value[idx]!.content = noteEditContent.value
     noteEditDialogVisible.value = false
     ElMessage.success('笔记已更新')
   } catch {

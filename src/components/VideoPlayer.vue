@@ -232,11 +232,6 @@ import {
   type Discussion,
   type DiscussionReply,
 } from '@/api/discussion'
-import {
-  getVideoProgress,
-  updateVideoProgress,
-  type VideoProgress
-} from '@/api/videoProgress'
 import { useUserStore } from '@/stores/user'
 
 interface Props {
@@ -383,38 +378,51 @@ async function initPlayer() {
 
   // 恢复播放进度
   if (isLoggedIn.value) {
-    await restoreProgress()
+    restoreProgress()
   }
 }
 
+// 本地播放进度（纯前端存储，不依赖服务端接口）
+interface LocalVideoProgress {
+  currentTime: number
+  duration: number
+  playbackRate: number
+  completed: boolean
+}
+
+function progressStorageKey(): string {
+  return `video_progress_${props.videoId}`
+}
+
 // 保存播放进度
-async function saveProgress(time: number, completed = false) {
+function saveProgress(time: number, completed = false) {
   if (!isLoggedIn.value) return
 
   try {
-    await updateVideoProgress({
-      videoId: props.videoId,
+    const data: LocalVideoProgress = {
       currentTime: time,
       duration: duration.value,
       playbackRate: playbackRate.value,
       completed,
-      knowledgePointId: props.knowledgePointId,
-      courseId: props.courseId,
-    })
+    }
+    localStorage.setItem(progressStorageKey(), JSON.stringify(data))
   } catch (error) {
     console.error('保存进度失败:', error)
   }
 }
 
 // 恢复播放进度
-async function restoreProgress() {
+function restoreProgress() {
   if (!isLoggedIn.value) return
 
   try {
-    const progress = await getVideoProgress(props.videoId)
+    const raw = localStorage.getItem(progressStorageKey())
+    if (!raw) return
+
+    const progress = JSON.parse(raw) as LocalVideoProgress
     if (progress && progress.currentTime > 0 && !progress.completed) {
       // 如果进度超过 95%，从头开始播放
-      if (progress.currentTime / progress.duration > 0.95) {
+      if (progress.duration > 0 && progress.currentTime / progress.duration > 0.95) {
         player?.currentTime(0)
       } else {
         player?.currentTime(progress.currentTime)

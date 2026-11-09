@@ -37,3 +37,7 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+# 构建产物压缩包与手工备份文件
+dist.tar.gz
+*.bak

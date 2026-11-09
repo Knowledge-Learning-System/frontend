@@ -62,7 +62,7 @@ export async function askQuestion(
     history,
     courseId: courseId ?? null,
   })
-  return data as QAAnswerResponse
+  return data as unknown as QAAnswerResponse
 }
 
 // ═══════════════════════════════════════════════════════════════

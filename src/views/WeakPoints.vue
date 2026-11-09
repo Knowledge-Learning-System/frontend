@@ -323,6 +323,7 @@ const handleStartReview = () => {
   }
   // 跳转到答题页面，从最薄弱的知识点开始
   const weakest = weakPoints.value[0]
+  if (!weakest) return
   router.push({
     path: '/assessment',
     query: { nodeId: weakest.id, nodeName: weakest.name }

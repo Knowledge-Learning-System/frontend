@@ -244,7 +244,7 @@ onMounted(() => {
     messages.value = history
     const maxCounter = history.reduce((max, m) => {
       const match = m.id?.match(/_(\d+)$/)
-      return match ? Math.max(max, parseInt(match[1], 10)) : max
+      return match ? Math.max(max, parseInt(match[1] ?? '0', 10)) : max
     }, 0)
     msgIdCounter = maxCounter
     nextTick(() => scrollToBottom())
