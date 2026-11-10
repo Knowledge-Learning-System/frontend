@@ -19,9 +19,41 @@
         router
         class="sidebar-menu"
       >
+        <el-menu-item index="/admin/dashboard">
+          <el-icon><DataLine /></el-icon>
+          <template #title>系统概览</template>
+        </el-menu-item>
+        <el-menu-item index="/admin/users">
+          <el-icon><User /></el-icon>
+          <template #title>用户管理</template>
+        </el-menu-item>
+        <el-menu-item index="/admin/courses">
+          <el-icon><Notebook /></el-icon>
+          <template #title>课程总览</template>
+        </el-menu-item>
         <el-menu-item index="/admin/teachers">
           <el-icon><Reading /></el-icon>
           <template #title>教师课程分配</template>
+        </el-menu-item>
+        <el-menu-item index="/admin/graph">
+          <el-icon><Share /></el-icon>
+          <template #title>知识图谱维护</template>
+        </el-menu-item>
+        <el-menu-item index="/admin/resources">
+          <el-icon><FolderOpened /></el-icon>
+          <template #title>资源管理</template>
+        </el-menu-item>
+        <el-menu-item index="/admin/analysis">
+          <el-icon><TrendCharts /></el-icon>
+          <template #title>学情分析</template>
+        </el-menu-item>
+        <el-menu-item index="/admin/system">
+          <el-icon><Setting /></el-icon>
+          <template #title>系统管理</template>
+        </el-menu-item>
+        <el-menu-item index="/admin/strategy">
+          <el-icon><Aim /></el-icon>
+          <template #title>推荐策略配置</template>
         </el-menu-item>
       </el-menu>
 
@@ -70,7 +102,7 @@
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { Reading, Fold, Expand } from '@element-plus/icons-vue'
+import { DataLine, User, Notebook, Reading, Fold, Expand, Share, FolderOpened, TrendCharts, Setting, Aim } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const userStore = useUserStore()
@@ -81,7 +113,15 @@ const userInfo = computed(() => userStore.userInfo)
 const activeMenu = computed(() => route.path)
 
 const pageTitleMap: Record<string, string> = {
+  '/admin/dashboard': '系统概览',
+  '/admin/users': '用户管理',
+  '/admin/courses': '课程总览',
   '/admin/teachers': '教师课程分配',
+  '/admin/graph': '知识图谱维护',
+  '/admin/resources': '资源管理',
+  '/admin/analysis': '学情分析',
+  '/admin/system': '系统管理',
+  '/admin/strategy': '推荐策略配置',
 }
 
 const currentPageTitle = computed(() => pageTitleMap[route.path] || '管理员端')

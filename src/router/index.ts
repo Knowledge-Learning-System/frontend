@@ -183,12 +183,52 @@ const router = createRouter({
     {
       path: '/admin',
       component: () => import('@/layouts/AdminLayout.vue'),
-      redirect: '/admin/teachers',
+      redirect: '/admin/dashboard',
       children: [
+        {
+          path: 'dashboard',
+          name: 'AdminDashboard',
+          component: () => import('@/views/admin/AdminDashboard.vue'),
+        },
+        {
+          path: 'users',
+          name: 'AdminUsers',
+          component: () => import('@/views/admin/AdminUsers.vue'),
+        },
+        {
+          path: 'courses',
+          name: 'AdminCourses',
+          component: () => import('@/views/admin/AdminCourses.vue'),
+        },
         {
           path: 'teachers',
           name: 'AdminTeacherCourses',
           component: () => import('@/views/admin/AdminTeacherCourses.vue'),
+        },
+        {
+          path: 'graph',
+          name: 'AdminGraph',
+          component: () => import('@/views/admin/AdminGraph.vue'),
+        },
+        {
+          path: 'resources',
+          name: 'AdminResources',
+          component: () => import('@/views/admin/AdminResources.vue'),
+        },
+        {
+          path: 'analysis',
+          name: 'AdminAnalysis',
+          component: () => import('@/views/admin/AdminAnalysis.vue'),
+        },
+        {
+          path: 'system',
+          name: 'AdminSystem',
+          component: () => import('@/views/admin/AdminSystem.vue'),
+        },
+        {
+          path: 'strategy',
+          name: 'AdminStrategy',
+          component: () => import('@/views/admin/AdminStrategy.vue'),
         },
       ],
     },
@@ -235,7 +275,7 @@ router.beforeEach(async (to) => {
 
   // 管理员访问任何非管理员端页面 → 锁死在管理员端
   if (role === 'admin' && !to.path.startsWith('/admin')) {
-    return '/admin/teachers'
+    return '/admin/dashboard'
   }
 
   return true
